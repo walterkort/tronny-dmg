@@ -2,12 +2,40 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const os = require('os');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static('public'));
+app.use(express.json());
+
+const SCORES_FILE = path.join(__dirname, 'scores.json');
+
+function readScores() {
+  try { return JSON.parse(fs.readFileSync(SCORES_FILE, 'utf8')); }
+  catch { return []; }
+}
+
+function writeScores(list) {
+  fs.writeFileSync(SCORES_FILE, JSON.stringify(list));
+}
+
+app.get('/api/scores', (req, res) => {
+  res.json(readScores());
+});
+
+app.post('/api/scores', (req, res) => {
+  const { name, score } = req.body;
+  if (!name || typeof score !== 'number') return res.status(400).end();
+  const list = readScores();
+  list.push({ name: String(name).trim().slice(0, 20), score, date: new Date().toLocaleDateString('nl-NL') });
+  list.sort((a, b) => b.score - a.score);
+  writeScores(list.slice(0, 50));
+  res.json({ ok: true });
+});
 
 const state = {
   players: {},      // socketId -> { name, score }

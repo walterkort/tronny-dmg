@@ -7,6 +7,7 @@
     @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 120%; }
     body {
       font-family: 'Share Tech Mono', 'Courier New', monospace;
       background: #050510; color: #e0e0ff;
@@ -69,7 +70,7 @@
       border: 1px solid rgba(0,229,255,0.15);
       padding: 12px 20px; border-radius: 4px;
       background: rgba(0,229,255,0.03);
-      min-width: 280px;
+      width: 320px;
     }
     #settings .s-title {
       font-size: 0.65rem; letter-spacing: 3px; opacity: 0.35; margin-bottom: 4px;
@@ -201,7 +202,7 @@
     #name-entry {
       display: none; flex-direction: column; align-items: center; gap: 0.6rem;
       border: 1px solid rgba(0,229,255,0.2); border-radius: 4px;
-      padding: 1rem 1.5rem; background: rgba(0,229,255,0.03); min-width: 300px;
+      padding: 1rem 1.5rem; background: rgba(0,229,255,0.03); width: 320px;
     }
     #name-entry .ne-title { font-size: 0.65rem; letter-spacing: 3px; opacity: 0.4; align-self: flex-start; }
     .ne-row {
@@ -226,7 +227,7 @@
     /* ── HISCORE PANEL ── */
     #hiscore-panel {
       display: none; flex-direction: column; gap: 0.4rem;
-      min-width: 300px;
+      width: 320px;
     }
     #hiscore-panel .hs-title { font-size: 0.65rem; letter-spacing: 3px; opacity: 0.4; }
     .hs-row {
@@ -247,7 +248,7 @@
     #lobby-hs {
       display: flex; flex-direction: column; gap: 4px;
       border: 1px solid rgba(0,229,255,0.1); border-radius: 4px;
-      padding: 10px 16px; background: rgba(0,229,255,0.02); min-width: 280px;
+      padding: 10px 16px; background: rgba(0,229,255,0.02); width: 320px;
     }
     #lobby-hs .lhs-title { font-size: 0.65rem; letter-spacing: 3px; opacity: 0.35; margin-bottom: 2px; }
     .lhs-row {
@@ -845,13 +846,49 @@ function stopLoop() {
 
 // ── HIGH SCORES ────────────────────────────────────────────
 const HS_GLOBAL_KEY = 'tronny_hiscores';
+let hiScoreCache = [];
+
+async function fetchHiScores() {
+  try {
+    const r = await fetch('/api/scores');
+    hiScoreCache = await r.json();
+  } catch {
+    try { hiScoreCache = JSON.parse(localStorage.getItem(HS_GLOBAL_KEY) || '[]'); }
+    catch { hiScoreCache = []; }
+  }
+  localStorage.setItem(HS_GLOBAL_KEY, JSON.stringify(hiScoreCache));
+}
+
+async function saveHiScore(name, score) {
+  try {
+    await fetch('/api/scores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, score }) });
+    await fetchHiScores();
+  } catch {
+    hiScoreCache.push({ name: name.trim().slice(0, 20), score, date: new Date().toLocaleDateString('nl-NL') });
+    hiScoreCache.sort((a, b) => b.score - a.score);
+    hiScoreCache = hiScoreCache.slice(0, 50);
+    localStorage.setItem(HS_GLOBAL_KEY, JSON.stringify(hiScoreCache));
+  }
+}
+
+function renderHiScores(newNames = []) {
+  const el = document.getElementById('hs-list');
+  if (!el) return;
+  if (hiScoreCache.length === 0) { el.innerHTML = '<div class="hs-empty">// GEEN SCORES NOG</div>'; return; }
+  el.innerHTML = hiScoreCache.map((e, i) =>
+    `<div class="hs-row ${newNames.includes(e.name) ? 'hs-new' : ''}">
+       <span class="hs-rank">${i + 1}.</span>
+       <span class="hs-name">${e.name}</span>
+       <span class="hs-score">${e.score}</span>
+       <span class="hs-date">${e.date}</span>
+     </div>`).join('');
+}
 
 function renderLobbyHiScores() {
-  const list = loadHiScores();
   const el = document.getElementById('lhs-list');
   if (!el) return;
-  if (list.length === 0) { el.innerHTML = '<div class="lhs-empty">// NOG GEEN SCORES</div>'; return; }
-  el.innerHTML = list.slice(0, 5).map((e, i) =>
+  if (hiScoreCache.length === 0) { el.innerHTML = '<div class="lhs-empty">// NOG GEEN SCORES</div>'; return; }
+  el.innerHTML = hiScoreCache.slice(0, 5).map((e, i) =>
     `<div class="lhs-row">
        <span class="lhs-rank">${i + 1}.</span>
        <span class="lhs-name">${e.name}</span>
@@ -859,38 +896,16 @@ function renderLobbyHiScores() {
      </div>`).join('');
 }
 
-function loadHiScores() {
-  try { return JSON.parse(localStorage.getItem(HS_GLOBAL_KEY) || '[]'); }
-  catch { return []; }
-}
-
-function saveHiScore(name, score) {
-  const list = loadHiScores();
-  list.push({ name: name.trim().slice(0, 20), score, date: new Date().toLocaleDateString('nl-NL') });
-  list.sort((a, b) => b.score - a.score);
-  localStorage.setItem(HS_GLOBAL_KEY, JSON.stringify(list.slice(0, 10)));
-}
-
-function renderHiScores(newNames = []) {
-  const list = loadHiScores();
-  const el = document.getElementById('hs-list');
-  if (list.length === 0) {
-    el.innerHTML = '<div class="hs-empty">// GEEN SCORES NOG</div>';
-    return;
-  }
-  el.innerHTML = list.map((e, i) => {
-    const isNew = newNames.includes(e.name);
-    return `<div class="hs-row ${isNew ? 'hs-new' : ''}">
-      <span class="hs-rank">${i + 1}.</span>
-      <span class="hs-name">${e.name}</span>
-      <span class="hs-score">${e.score}</span>
-      <span class="hs-date">${e.date}</span>
-    </div>`;
-  }).join('');
-}
+fetchHiScores().then(() => renderLobbyHiScores());
 
 // ── END ────────────────────────────────────────────────────
 function showEnd() {
+  // accumulate current round's pipes if ESC mid-game
+  if (phase === 'playing') {
+    PLAYERS.forEach((p, i) => {
+      p.totalPipes = (p.totalPipes ?? 0) + (balls[i]?.pipesThisRound ?? 0);
+    });
+  }
   stopLoop(); clearTimeout(timer);
   rbEl.classList.remove('show'); cdEl.classList.remove('show');
   gameEl.style.display = 'none';
@@ -926,12 +941,12 @@ function showEnd() {
   // focus first input
   setTimeout(() => document.getElementById('ne-input-0')?.focus(), 50);
 
-  document.getElementById('save-scores-btn').onclick = () => {
+  document.getElementById('save-scores-btn').onclick = async () => {
     const saved = [];
-    PLAYERS.forEach((p, i) => {
+    for (let i = 0; i < PLAYERS.length; i++) {
       const val = document.getElementById(`ne-input-${i}`)?.value.trim();
-      if (val) { saveHiScore(val, p.totalPipes ?? 0); saved.push(val); }
-    });
+      if (val) { await saveHiScore(val, PLAYERS[i].totalPipes ?? 0); saved.push(val); }
+    }
     document.getElementById('name-entry').style.display = 'none';
     document.getElementById('hiscore-panel').style.display = 'flex';
     renderHiScores(saved);
