@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>FLAPPY.EXE</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      background: #050510; color: #e0e0ff;
+      height: 100dvh; overflow: hidden; user-select: none;
+    }
+
+    /* ── LOBBY ── */
+    #lobby {
+      height: 100dvh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 1.4rem;
+      background: radial-gradient(ellipse at center, #0a0a2a 0%, #050510 70%);
+    }
+    #lobby::before {
+      content: '';
+      position: absolute; inset: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0,255,200,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,200,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    #lobby h1 {
+      font-size: 3.5rem; letter-spacing: 8px;
+      color: #00ffe0;
+      text-shadow: 0 0 20px #00ffe0, 0 0 60px #00ffe044;
+    }
+    #lobby .sub  { font-size: 0.95rem; opacity: 0.5; letter-spacing: 2px; }
+    #lobby .hint { font-size: 0.8rem; opacity: 0.35; letter-spacing: 1px; }
+
+    .players-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; margin: 0.5rem 0; }
+    .p-card {
+      padding: 1rem 1.5rem; border-radius: 4px; text-align: center;
+      border: 1px solid var(--color);
+      background: color-mix(in srgb, var(--color) 8%, #05050f);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--color) 30%, transparent), inset 0 0 20px color-mix(in srgb, var(--color) 5%, transparent);
+      min-width: 110px; position: relative;
+    }
+    .p-card .key  { font-size: 2rem; font-weight: 900; color: var(--color); text-shadow: 0 0 10px var(--color); }
+    .p-card .name { font-size: 0.8rem; opacity: 0.6; margin-top: 0.3rem; letter-spacing: 1px; }
+    .p-card .leave { position: absolute; top: 5px; right: 9px; font-size: 0.7rem; opacity: 0.3; cursor: pointer; color: #ff4466; }
+    .p-card .leave:hover { opacity: 0.9; }
+
+    #start-btn {
+      padding: 0.85rem 3rem; font-size: 1rem; font-weight: 700; letter-spacing: 4px;
+      border: 1px solid #00ffe0; border-radius: 4px;
+      background: transparent; color: #00ffe0;
+      cursor: pointer; font-family: inherit;
+      text-shadow: 0 0 8px #00ffe0;
+      box-shadow: 0 0 16px #00ffe044, inset 0 0 16px #00ffe011;
+      transition: all 0.15s;
+    }
+    #start-btn:hover:not(:disabled) {
+      background: #00ffe018;
+      box-shadow: 0 0 30px #00ffe066, inset 0 0 20px #00ffe022;
+    }
+    #start-btn:disabled { opacity: 0.25; cursor: default; }
+
+    /* ── SETTINGS ── */
+    #settings {
+      display: flex; flex-direction: column; gap: 4px;
+      border: 1px solid rgba(0,229,255,0.15);
+      padding: 12px 20px; border-radius: 4px;
+      background: rgba(0,229,255,0.03);
+      min-width: 280px;
+    }
+    #settings .s-title {
+      font-size: 0.65rem; letter-spacing: 3px; opacity: 0.35; margin-bottom: 4px;
+    }
+    .s-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 6px; border-radius: 3px; gap: 16px;
+      font-size: 0.85rem; letter-spacing: 1px;
+      transition: background 0.1s;
+    }
+    .s-row.selected {
+      background: rgba(0,229,255,0.1);
+      color: #00e5ff; text-shadow: 0 0 8px #00e5ff44;
+    }
+    .s-row .s-label { opacity: 0.6; min-width: 120px; }
+    .s-row.selected .s-label { opacity: 1; }
+    .s-row .s-val {
+      font-weight: 900; min-width: 60px; text-align: right; color: #00e5ff;
+    }
+    .s-row .s-arrows { font-size: 0.7rem; opacity: 0.3; letter-spacing: 0; }
+    .s-row.selected .s-arrows { opacity: 0.7; }
+
+    /* ── GAME ── */
+    #game { display: none; height: 100dvh; position: relative; }
+    #game canvas { width: 100%; height: 100%; display: block; }
+
+    #hud {
+      position: absolute; inset: 0; pointer-events: none; z-index: 5;
+    }
+    #scorebar {
+      display: flex; gap: 0; justify-content: center;
+      background: rgba(5,5,20,0.85);
+      border-bottom: 1px solid rgba(0,255,224,0.15);
+    }
+    .score-chip {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 8px 20px; gap: 3px;
+      border-right: 1px solid rgba(255,255,255,0.06);
+      transition: opacity 0.3s;
+    }
+    .score-chip:last-child { border-right: none; }
+    .score-chip.dead { opacity: 0.2; }
+    .chip-name { font-size: 0.7rem; letter-spacing: 2px; color: var(--color); text-shadow: 0 0 6px var(--color); }
+    .chip-pts  { font-size: 1.4rem; font-weight: 900; color: var(--color); text-shadow: 0 0 10px var(--color); line-height: 1; }
+    .chip-hs   { font-size: 0.65rem; opacity: 0.45; letter-spacing: 1px; }
+    .chip-lives { display: flex; gap: 3px; }
+    .life-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--color);
+      box-shadow: 0 0 5px var(--color);
+      transition: all 0.2s;
+    }
+    .life-dot.gone { background: transparent; border: 1px solid var(--color); box-shadow: none; opacity: 0.3; }
+
+    #round-badge {
+      position: absolute; top: 10px; right: 14px;
+      font-size: 0.75rem; opacity: 0.4; letter-spacing: 2px; color: #00e5ff;
+    }
+    #level-flash {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 2.5rem; font-weight: 900; letter-spacing: 6px;
+      color: #00e5ff; text-shadow: 0 0 40px #00e5ff, 0 0 80px #00e5ff88;
+      opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 8;
+    }
+    #level-flash.show { opacity: 1; transition: opacity 0s; animation: lvlfade 1.4s forwards; }
+    @keyframes lvlfade { 0%{opacity:1} 60%{opacity:1} 100%{opacity:0} }
+
+    #legend {
+      position: absolute; bottom: 14px; left: 14px;
+      display: flex; flex-direction: column; gap: 6px;
+      background: rgba(5,5,20,0.75);
+      border: 1px solid rgba(0,255,224,0.1);
+      padding: 10px 14px; border-radius: 4px;
+      font-size: 0.8rem;
+    }
+    .leg-row { display: flex; align-items: center; gap: 8px; transition: opacity 0.3s; }
+    .leg-row.dead { opacity: 0.2; }
+    .leg-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 6px var(--color); }
+    .leg-key  { font-weight: 900; min-width: 24px; color: var(--color); text-shadow: 0 0 6px var(--color); }
+    .leg-name { opacity: 0.6; letter-spacing: 1px; }
+
+    /* countdown */
+    #countdown {
+      position: fixed; inset: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(5,5,20,0.8);
+      font-size: 14rem; font-weight: 900;
+      color: #00ffe0; text-shadow: 0 0 60px #00ffe0;
+      opacity: 0; transition: opacity 0.15s; pointer-events: none;
+    }
+    #countdown.show { opacity: 1; }
+
+    /* result banner */
+    #result-banner {
+      position: fixed; inset: 0; z-index: 18;
+      display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.6rem;
+      background: rgba(5,5,20,0.75);
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    #result-banner.show { opacity: 1; }
+    #result-banner .winner-text { font-size: 2.5rem; font-weight: 900; letter-spacing: 4px; }
+    #result-banner .sub-text    { font-size: 0.85rem; opacity: 0.5; letter-spacing: 2px; }
+
+    /* ── END ── */
+    #end {
+      display: none; height: 100dvh;
+      flex-direction: column; align-items: center; justify-content: center; gap: 1.2rem;
+      background: radial-gradient(ellipse at center, #0a0a2a 0%, #050510 70%);
+    }
+    #end h1 { font-size: 2rem; letter-spacing: 6px; color: #00ffe0; text-shadow: 0 0 20px #00ffe0; }
+    #end .winner-name { font-size: 2.8rem; font-weight: 900; letter-spacing: 4px; }
+    .final-scores { display: flex; flex-direction: column; gap: 0.5rem; width: 280px; margin-top: 0.5rem; }
+    .final-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.6rem 1rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 4px;
+    }
+    .final-row .pts { font-weight: 900; }
+    #play-again {
+      margin-top: 0.5rem; padding: 0.8rem 2.5rem; font-size: 0.95rem; font-weight: 700; letter-spacing: 4px;
+      border: 1px solid #00ffe0; border-radius: 4px; background: transparent;
+      color: #00ffe0; cursor: pointer; font-family: inherit;
+      text-shadow: 0 0 8px #00ffe0; box-shadow: 0 0 16px #00ffe044;
+    }
+  </style>
+</head>
+<body>
+
+<div id="lobby">
+  <h1>FLAPPY.EXE</h1>
+  <p class="sub">// DRUK OP JOUW TOETS OM TE JOINEN</p>
+  <div class="players-grid" id="lobby-grid"></div>
+  <div id="settings">
+    <div class="s-title">// INSTELLINGEN  ↑↓ SELECTEREN  - = AANPASSEN</div>
+  </div>
+  <p class="hint" id="lobby-hint">_ WACHTEN OP SPELERS</p>
+  <button id="start-btn" disabled>[ START ]</button>
+</div>
+
+<div id="game">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div id="scorebar"></div>
+    <div id="round-badge"></div>
+    <div id="level-flash"></div>
+    <div id="legend"></div>
+  </div>
+</div>
+
+<div id="countdown"></div>
+<div id="result-banner">
+  <div class="winner-text" id="rb-text"></div>
+  <div class="sub-text" id="rb-sub"></div>
+</div>
+
+<div id="end">
+  <h1>// GAME OVER</h1>
+  <div class="winner-name" id="end-winner"></div>
+  <div class="final-scores" id="final-scores"></div>
+  <button id="play-again">[ OPNIEUW ]</button>
+</div>
+
+<script>
+const COLORS = ['#00e5ff', '#4d79ff', '#00ffcc', '#a64dff'];
+const NAMES  = ['P1', 'P2', 'P3', 'P4'];
+const MAX_LIVES = 4;
+const INVINCIBLE_MS = 3000;  // 3s at round start
+const RESPAWN_INVINCIBLE_MS = 1500; // brief after respawn
+
+const BLOCKED = new Set(['escape','tab','capslock','shift','control','alt','meta',
+  'arrowup','arrowdown','arrowleft','arrowright','f1','f2','f3','f4','f5','f6',
+  'f7','f8','f9','f10','f11','f12','backspace','delete','enter','insert','home',
+  'end','pageup','pagedown','printscreen','scrolllock','pause','contextmenu']);
+
+const TOTAL_ROUNDS     = 7;
+const GRAVITY          = 0.17;
+const JUMP_VY          = -5.0;
+const BALL_R           = 13;
+const PIPE_W           = 50;
+const TRON_BLUE = '#00e5ff';
+
+// Level thresholds (seconds) → { speed, gap, interval }
+const LEVELS = [
+  { after: 0,  speed: 1.8, gap: 230, interval: 140 },
+  { after: 20, speed: 2.3, gap: 200, interval: 125 },
+  { after: 40, speed: 2.8, gap: 175, interval: 110 },
+  { after: 60, speed: 3.3, gap: 155, interval: 95  },
+  { after: 80, speed: 3.8, gap: 138, interval: 82  },
+];
+
+// ── SETTINGS ───────────────────────────────────────────────
+const SETTINGS = [
+  { key: 'gravity',   label: 'GRAVITY',        min: 0.05, max: 0.40, step: 0.02, default: 0.17, val: 0.17,  fmt: v => v.toFixed(2), hint: 'laag = zweeft' },
+  { key: 'jump',      label: 'SPRONG KRACHT',  min: 3.0,  max: 9.0,  step: 0.5,  default: 5.0,  val: 5.0,   fmt: v => v.toFixed(1), hint: 'hoog = hogere stoot' },
+  { key: 'gap',       label: 'OPENING',        min: 100,  max: 320,  step: 10,   default: 220,  val: 220,   fmt: v => v + 'px', hint: 'breed = makkelijker' },
+  { key: 'speed',     label: 'SNELHEID',       min: 0.8,  max: 4.0,  step: 0.2,  default: 1.8,  val: 1.8,   fmt: v => v.toFixed(1) + 'x', hint: '' },
+  { key: 'lives',     label: 'LEVENS',         min: 1,    max: 10,   step: 1,    default: 4,    val: 4,     fmt: v => v + '', hint: '' },
+  { key: 'rounds',    label: 'RONDES',         min: 1,    max: 20,   step: 1,    default: 3,    val: 3,     fmt: v => v + '', hint: '' },
+];
+let settingSel = 0;
+
+function settingVal(key) { return SETTINGS.find(s => s.key === key).val; }
+
+function renderSettings() {
+  const el = document.getElementById('settings');
+  el.innerHTML = `<div class="s-title">// INSTELLINGEN &nbsp; ↑↓ KIEZEN &nbsp; ←→ AANPASSEN &nbsp; R RESET</div>` +
+    SETTINGS.map((s, i) => `
+      <div class="s-row ${i === settingSel ? 'selected' : ''}">
+        <span class="s-label">${s.label}${s.hint ? ' <small style="opacity:.4;font-size:.7em">'+s.hint+'</small>' : ''}</span>
+        <span class="s-val">${s.fmt(s.val)}</span>
+      </div>`).join('');
+}
+
+function resetSettings() {
+  SETTINGS.forEach(s => { s.val = s.default; sessionStorage.removeItem(`set_${s.key}`); });
+  renderSettings();
+}
+
+function adjustSetting(dir) {
+  const s = SETTINGS[settingSel];
+  s.val = Math.round((s.val + dir * s.step) * 1000) / 1000;
+  s.val = Math.max(s.min, Math.min(s.max, s.val));
+  sessionStorage.setItem(`set_${s.key}`, s.val);
+  renderSettings();
+}
+
+// restore settings from session
+SETTINGS.forEach(s => {
+  const saved = sessionStorage.getItem(`set_${s.key}`);
+  if (saved !== null) s.val = +saved;
+});
+
+let PLAYERS = [];
+let phase   = 'lobby';
+let round   = 0;
+let timer   = null;
+let rafId   = null;
+let roundStartTime = 0;
+
+let balls = [];
+let pipes = [];
+let frameCount   = 0;
+let pipesCleared = 0;
+
+const cv    = document.getElementById('cv');
+const ctx   = cv.getContext('2d');
+const lobbyEl  = document.getElementById('lobby');
+const gameEl   = document.getElementById('game');
+const endEl    = document.getElementById('end');
+const startBtn = document.getElementById('start-btn');
+const cdEl     = document.getElementById('countdown');
+const rbEl     = document.getElementById('result-banner');
+
+// ── LOBBY ──────────────────────────────────────────────────
+function labelFor(key) {
+  if (key === ' ') return 'SPC';
+  return key.length === 1 ? key.toUpperCase() : key;
+}
+
+function renderLobby() {
+  const grid = document.getElementById('lobby-grid');
+  grid.innerHTML = PLAYERS.map((p, i) => `
+    <div class="p-card" style="--color:${p.color}">
+      <span class="leave" data-i="${i}">✕</span>
+      <div class="key">${p.label}</div>
+      <div class="name">${p.name}</div>
+    </div>`).join('');
+  grid.querySelectorAll('.leave').forEach(btn => {
+    btn.addEventListener('click', () => {
+      PLAYERS.splice(+btn.dataset.i, 1);
+      PLAYERS.forEach((p, j) => { p.color = COLORS[j]; p.name = NAMES[j]; });
+      renderLobby();
+    });
+  });
+  const n = PLAYERS.length;
+  startBtn.disabled = n < 1;
+  startBtn.textContent = n >= 1 ? `[ START ${n}P ]` : '[ WACHT... ]';
+
+  renderSettings();
+  scheduleAutoStart();
+}
+
+let autoStartTimer   = null;
+let countdownTimer   = null;
+let countdownSeconds = 0;
+
+function scheduleAutoStart() {
+  clearTimeout(autoStartTimer);
+  clearInterval(countdownTimer);
+  const n = PLAYERS.length;
+  const hint = document.getElementById('lobby-hint');
+
+  if (n < 1) {
+    hint.textContent = '_ WACHTEN OP SPELERS';
+    return;
+  }
+
+  countdownSeconds = 5;
+  hint.textContent = `START OVER ${countdownSeconds}s — OF DRUK SPATIE`;
+
+  countdownTimer = setInterval(() => {
+    countdownSeconds--;
+    if (countdownSeconds > 0) {
+      hint.textContent = `START OVER ${countdownSeconds}s — OF DRUK SPATIE`;
+    } else {
+      clearInterval(countdownTimer);
+    }
+  }, 1000);
+
+  autoStartTimer = setTimeout(() => {
+    if (phase === 'lobby' && PLAYERS.length >= 1) startBtn.click();
+  }, 5000);
+}
+
+// ── HUD ────────────────────────────────────────────────────
+function buildHUD() {
+  document.getElementById('scorebar').innerHTML = PLAYERS.map((p, i) =>
+    `<div class="score-chip" id="chip${i}" style="--color:${p.color}">
+       <div class="chip-name">${p.label} ${p.name}</div>
+       <div class="chip-pts" id="pts${i}">0</div>
+       <div class="chip-hs"  id="hs${i}">HS: ${getHS(p.key)}</div>
+       <div class="chip-lives" id="lives${i}"></div>
+     </div>`).join('');
+
+  document.getElementById('legend').innerHTML = PLAYERS.map((p, i) =>
+    `<div class="leg-row" id="leg${i}" style="--color:${p.color}">
+       <div class="leg-dot" style="background:${p.color}"></div>
+       <span class="leg-key">${p.label}</span>
+       <span class="leg-name">${p.name}</span>
+     </div>`).join('');
+
+  updateLivesHUD();
+}
+
+function updateLivesHUD() {
+  PLAYERS.forEach((p, i) => {
+    const el = document.getElementById(`lives${i}`);
+    if (!el) return;
+    const maxL = settingVal('lives');
+    const lives = balls[i]?.lives ?? maxL;
+    el.innerHTML = Array.from({length: maxL}, (_, j) =>
+      `<div class="life-dot ${j < lives ? '' : 'gone'}"></div>`).join('');
+  });
+}
+
+function getHS(key)      { return +(sessionStorage.getItem(`hs_${key}`) || 0); }
+function setHS(key, val) { sessionStorage.setItem(`hs_${key}`, val); }
+
+function updateScoreHUD() {
+  PLAYERS.forEach((p, i) => {
+    const pts = document.getElementById(`pts${i}`);
+    const hs  = document.getElementById(`hs${i}`);
+    if (pts) pts.textContent = balls[i]?.pipesThisRound ?? 0;
+    if (hs)  hs.textContent  = `HS: ${getHS(p.key)}`;
+  });
+}
+
+function setChipDead(i, dead) {
+  document.getElementById(`chip${i}`)?.classList.toggle('dead', dead);
+  document.getElementById(`leg${i}`)?.classList.toggle('dead', dead);
+}
+
+let currentLevel = 0;
+
+function getDiff() {
+  const elapsed = (performance.now() - roundStartTime) / 1000;
+  let lvl = 0;
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (elapsed >= LEVELS[i].after) { lvl = i; break; }
+  }
+  if (lvl > currentLevel) {
+    currentLevel = lvl;
+    showLevelUp(lvl + 1);
+  }
+  const base = LEVELS[lvl];
+  const gapDelta  = settingVal('gap')   - LEVELS[0].gap;
+  const spdScale  = settingVal('speed') / LEVELS[0].speed;
+  return { speed: base.speed * spdScale, gap: base.gap + gapDelta, interval: Math.round(base.interval * spdScale) };
+}
+
+function showLevelUp(n) {
+  const el = document.getElementById('level-flash');
+  el.textContent = `// LVL ${n}`;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1400);
+}
+
+// ── INIT ───────────────────────────────────────────────────
+function initGame() {
+  cv.width  = gameEl.clientWidth;
+  cv.height = gameEl.clientHeight;
+  pipes = []; frameCount = 0; currentLevel = 0; roundWinnerIdx = -1;
+  roundStartTime = performance.now();
+
+  balls = PLAYERS.map((p, i) => ({
+    x: cv.width * 0.28 - i * 38,
+    y: cv.height * 0.45,
+    vy: 0,
+    lives: settingVal('lives'),
+    dead: false,
+    invincibleUntil: roundStartTime + INVINCIBLE_MS,
+    color: p.color,
+    pipesThisRound: 0,
+  }));
+
+  updateLivesHUD();
+  PLAYERS.forEach((_, i) => setChipDead(i, false));
+  document.getElementById('round-badge').textContent = `RONDE ${round} / ${settingVal('rounds')}`;
+}
+
+function respawn(i) {
+  const b = balls[i];
+  // smooth nudge: spread over ~30 frames
+  let nudgeLeft = 12;
+  const nudgeInterval = setInterval(() => {
+    const step = Math.min(nudgeLeft, 0.5);
+    balls.forEach(b2 => { if (!b2.dead) b2.x += step; });
+    nudgeLeft -= step;
+    if (nudgeLeft <= 0) clearInterval(nudgeInterval);
+  }, 16);
+  const minX = balls.reduce((m, b2) => b2.dead || b2 === b ? m : Math.min(m, b2.x), Infinity);
+  const tailX = isFinite(minX) ? minX - 38 : cv.width * 0.28 - i * 38;
+  b.x  = tailX;
+  b.y  = cv.height * 0.45;
+  b.vy = 0;
+  b.invincibleUntil = performance.now() + RESPAWN_INVINCIBLE_MS;
+}
+
+// ── GAME LOOP ──────────────────────────────────────────────
+function spawnPipe() {
+  const d = getDiff();
+  const minTop = 60, maxTop = cv.height - d.gap - 60;
+  pipes.push({ x: cv.width, topH: minTop + Math.random() * (maxTop - minTop), gap: d.gap, passed: false });
+}
+
+function gameLoop() {
+  if (phase === 'playing') tick();
+  rafId = requestAnimationFrame(gameLoop);
+}
+
+function tick() {
+  const d   = getDiff();
+  const now = performance.now();
+  ctx.clearRect(0, 0, cv.width, cv.height);
+
+  // ── background ──
+  const bg = ctx.createLinearGradient(0, 0, 0, cv.height);
+  bg.addColorStop(0, '#020210');
+  bg.addColorStop(1, '#020a02');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, cv.width, cv.height);
+
+  // grid
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,200,255,0.04)';
+  ctx.lineWidth = 1;
+  const gs = 50;
+  for (let x = 0; x < cv.width; x += gs)  { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x, cv.height); ctx.stroke(); }
+  for (let y = 0; y < cv.height; y += gs) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(cv.width, y); ctx.stroke(); }
+  ctx.restore();
+
+  // scanline overlay
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.07)';
+  for (let y = 0; y < cv.height; y += 4) { ctx.fillRect(0, y, cv.width, 2); }
+  ctx.restore();
+
+  // ── pipes ──
+  frameCount++;
+  if (frameCount >= d.interval) { spawnPipe(); frameCount = 0; }
+
+  pipes.forEach(p => {
+    p.x -= d.speed;
+
+    const botY = p.topH + p.gap;
+    const R    = PIPE_W / 2; // fully semicircular ends
+
+    // hue cycles slowly based on pipe index (assigned at spawn)
+    const neon = TRON_BLUE;
+    const dark = '#001a2a';
+
+    ctx.save();
+
+    // fill: dark tinted core
+    ctx.fillStyle = dark;
+    ctx.beginPath(); ctx.roundRect(p.x, 0,    PIPE_W, p.topH,           [0,0,R,R]); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(p.x, botY,  PIPE_W, cv.height - botY, [R,R,0,0]); ctx.fill();
+
+    // neon stroke + glow
+    ctx.strokeStyle = neon;
+    ctx.lineWidth   = 2.5;
+    ctx.shadowColor = neon;
+    ctx.shadowBlur  = 20;
+    ctx.beginPath(); ctx.roundRect(p.x, 0,    PIPE_W, p.topH,           [0,0,R,R]); ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(p.x, botY,  PIPE_W, cv.height - botY, [R,R,0,0]); ctx.stroke();
+
+    // inner highlight
+    ctx.strokeStyle = 'rgba(0,229,255,0.2)';
+    ctx.lineWidth   = 1; ctx.shadowBlur = 0;
+    ctx.beginPath(); ctx.moveTo(p.x + 7, 0);    ctx.lineTo(p.x + 7, p.topH);     ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.x + 7, botY); ctx.lineTo(p.x + 7, cv.height);  ctx.stroke();
+
+    ctx.restore();
+
+    // count per alive ball
+    balls.forEach((b, bi) => {
+      if (!b.dead && !p.cleared?.[bi] && p.x + PIPE_W < b.x - BALL_R) {
+        (p.cleared ??= {})[bi] = true;
+        b.pipesThisRound++;
+        updateScoreHUD();
+      }
+    });
+  });
+  pipes = pipes.filter(p => p.x + PIPE_W > 0);
+
+  // ── balls ──
+  balls.forEach((b, i) => {
+    if (b.dead) return;
+
+    b.vy += settingVal('gravity');
+    b.y  += b.vy;
+
+    const invincible = now < b.invincibleUntil;
+
+    if (!invincible) {
+      if (b.y - BALL_R < 0 || b.y + BALL_R > cv.height) { hitBall(i); return; }
+      for (const p of pipes) {
+        const inX      = b.x + BALL_R > p.x && b.x - BALL_R < p.x + PIPE_W;
+        const hitsTop  = b.y - BALL_R < p.topH;           // overlaps top bar
+        const hitsBot  = b.y + BALL_R > p.topH + p.gap;   // overlaps bottom bar
+        if (inX && (hitsTop || hitsBot)) { hitBall(i); return; }
+      }
+    } else {
+      if (b.y - BALL_R < 0)         { b.y = BALL_R; b.vy = 0; }
+      if (b.y + BALL_R > cv.height) { b.y = cv.height - BALL_R; b.vy = 0; }
+    }
+
+    drawBall(b.x, b.y, b.color, b.vy, invincible, now, i);
+  });
+
+  // invincibility countdown bar
+  const totalInvTime = INVINCIBLE_MS;
+  const elapsed = now - roundStartTime;
+  if (elapsed < totalInvTime) {
+    const frac = 1 - elapsed / totalInvTime;
+    const barW = cv.width * frac;
+    ctx.save();
+    ctx.shadowColor = '#00ffe0'; ctx.shadowBlur = 8;
+    ctx.fillStyle = '#00ffe044';
+    ctx.fillRect(0, cv.height - 4, barW, 4);
+    ctx.fillStyle = '#00ffe0';
+    ctx.fillRect(0, cv.height - 4, barW, 2);
+    ctx.restore();
+  }
+}
+
+function drawBall(x, y, color, vy, invincible, now) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  if (invincible) {
+    // pulsing hex shield
+    const pulse = 0.5 + 0.5 * Math.sin(now * 0.009);
+    const sr = BALL_R + 7 + pulse * 5;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
+      i === 0 ? ctx.moveTo(Math.cos(a)*sr, Math.sin(a)*sr)
+              : ctx.lineTo(Math.cos(a)*sr, Math.sin(a)*sr);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = color; ctx.shadowBlur = 20;
+    ctx.globalAlpha = 0.6 + 0.4 * pulse;
+    ctx.stroke();
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+
+  // outer glow ring
+  ctx.shadowColor = color; ctx.shadowBlur = 28;
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = 2.5;
+  ctx.beginPath(); ctx.arc(0, 0, BALL_R, 0, Math.PI * 2); ctx.stroke();
+
+  // dark core
+  ctx.shadowBlur = 0;
+  ctx.fillStyle  = '#050510';
+  ctx.beginPath(); ctx.arc(0, 0, BALL_R - 2.5, 0, Math.PI * 2); ctx.fill();
+
+  // inner cross lines (Tron circuit)
+  ctx.strokeStyle = color + '66';
+  ctx.lineWidth   = 1;
+  ctx.beginPath(); ctx.moveTo(-BALL_R + 4, 0); ctx.lineTo(BALL_R - 4, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, -BALL_R + 4); ctx.lineTo(0, BALL_R - 4); ctx.stroke();
+
+  // center dot
+  ctx.shadowColor = color; ctx.shadowBlur = 12;
+  ctx.fillStyle   = color;
+  ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+
+  ctx.restore();
+}
+
+// ── HIT / RESPAWN / KILL ───────────────────────────────────
+let roundWinnerIdx = -1;
+
+function hitBall(i) {
+  if (balls[i].dead || performance.now() < balls[i].invincibleUntil) return;
+  const b = balls[i];
+  b.lives--;
+  updateLivesHUD();
+
+  if (b.lives <= 0) {
+    b.dead = true;
+    setChipDead(i, true);
+
+    const alive = balls.filter(b => !b.dead);
+
+    // multiplayer: last survivor gets the win, but keeps playing
+    if (PLAYERS.length > 1 && alive.length === 1 && roundWinnerIdx === -1) {
+      roundWinnerIdx = balls.findIndex(b => !b.dead);
+    }
+
+    // round ends when everyone is dead
+    if (alive.length === 0) {
+      endRound(roundWinnerIdx);
+    }
+  } else {
+    respawn(i);
+  }
+}
+
+function endRound(winnerIdx) {
+  if (phase !== 'playing') return;
+  phase = 'roundend';
+
+  // save high scores
+  PLAYERS.forEach((p, i) => {
+    const pipes = balls[i]?.pipesThisRound ?? 0;
+    if (pipes > getHS(p.key)) setHS(p.key, pipes);
+  });
+  updateScoreHUD();
+
+  let winText, winColor;
+  if (winnerIdx >= 0) {
+    PLAYERS[winnerIdx].score++;
+    winText  = `${PLAYERS[winnerIdx].name} WINT`;
+    winColor = PLAYERS[winnerIdx].color;
+  } else {
+    winText  = PLAYERS.map((p, i) => `${p.name} ${balls[i]?.pipesThisRound ?? 0}`).join('   ');
+    winColor = '#aaaaaa';
+  }
+
+  document.getElementById('rb-text').textContent = winText;
+  document.getElementById('rb-text').style.color = winColor;
+  document.getElementById('rb-text').style.textShadow = `0 0 30px ${winColor}`;
+  document.getElementById('rb-sub').textContent = `RONDE ${round} / ${settingVal('rounds')}`;
+  rbEl.classList.add('show');
+
+  timer = setTimeout(() => {
+    rbEl.classList.remove('show');
+    stopLoop();
+    if (round >= settingVal('rounds')) showEnd();
+    else startRound();
+  }, 2200);
+}
+
+// ── COUNTDOWN ──────────────────────────────────────────────
+function startCountdown(cb) {
+  let n = 3; phase = 'countdown';
+  cdEl.classList.add('show'); cdEl.textContent = n;
+  const t = setInterval(() => {
+    n--;
+    if (n > 0) { cdEl.textContent = n; }
+    else { clearInterval(t); cdEl.classList.remove('show'); cb(); }
+  }, 800);
+}
+
+// ── ROUND ──────────────────────────────────────────────────
+function startRound() {
+  round++;
+  document.getElementById('round-badge').textContent = `RONDE ${round} / ${settingVal('rounds')}`;
+  startCountdown(() => {
+    initGame();
+    phase = 'playing';
+    if (!rafId) gameLoop();
+  });
+}
+
+function stopLoop() {
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+}
+
+// ── END ────────────────────────────────────────────────────
+function showEnd() {
+  stopLoop(); clearTimeout(timer);
+  rbEl.classList.remove('show'); cdEl.classList.remove('show');
+  gameEl.style.display = 'none';
+  endEl.style.display  = 'flex';
+  phase = 'end';
+
+  const totals   = PLAYERS.map(p => ({ p, score: p.score }));
+  const maxScore = Math.max(...totals.map(t => t.score));
+  const winners  = totals.filter(t => t.score === maxScore).map(t => t.p);
+  document.getElementById('end-winner').textContent = winners.map(p => p.name).join(' & ');
+  document.getElementById('end-winner').style.color = winners[0].color;
+  document.getElementById('end-winner').style.textShadow = `0 0 30px ${winners[0].color}`;
+  const sorted = [...totals].sort((a, b) => b.score - a.score);
+  document.getElementById('final-scores').innerHTML = sorted.map(({ p }) =>
+    `<div class="final-row">
+       <span style="color:${p.color};text-shadow:0 0 8px ${p.color}">▶ ${p.label} — ${p.name}</span>
+       <span class="pts" style="color:${p.color}">${p.score} <small style="opacity:.5;font-size:.7em">ronde${p.score !== 1 ? 's' : ''}</small></span>
+     </div>`).join('');
+}
+
+function resetGame() {
+  stopLoop(); clearTimeout(timer); clearTimeout(autoStartTimer); clearInterval(countdownTimer);
+  PLAYERS.forEach(p => p.score = 0);
+  round = 0; phase = 'lobby';
+  endEl.style.display = 'none'; gameEl.style.display = 'none';
+  lobbyEl.style.display = 'flex';
+  renderLobby();
+}
+
+// ── INPUT ──────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.altKey && e.key.toLowerCase() === 'f') {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+    else document.exitFullscreen();
+    return;
+  }
+  if (e.repeat) return;
+  const raw = e.key;
+  const key = raw.toLowerCase();
+
+  if (phase === 'lobby') {
+    if (key === 'enter' || raw === ' ') { if (!startBtn.disabled) startBtn.click(); return; }
+    if (key === 'escape') { settingSel = -1; renderSettings(); return; }
+    if (key === 'arrowup')    { settingSel = (settingSel <= 0 ? SETTINGS.length - 1 : settingSel - 1); renderSettings(); return; }
+    if (key === 'arrowdown')  { settingSel = (settingSel + 1) % SETTINGS.length; renderSettings(); return; }
+    if (key === 'arrowleft')  { if (settingSel >= 0) { adjustSetting(-1); return; } }
+    if (key === 'arrowright') { if (settingSel >= 0) { adjustSetting(+1); return; } }
+    if (key === 'r') { resetSettings(); return; }
+    if (BLOCKED.has(key)) return;
+    if (PLAYERS.find(p => p.key === key) || PLAYERS.length >= 4) return;
+    const i = PLAYERS.length;
+    PLAYERS.push({ key, label: labelFor(raw), color: COLORS[i], name: NAMES[i], score: 0 });
+    renderLobby();
+    return;
+  }
+
+  if (phase === 'playing' || phase === 'countdown' || phase === 'roundend') {
+    if (key === 'escape') { showEnd(); return; }
+  }
+
+  if (phase === 'playing') {
+    const pi = PLAYERS.findIndex(p => p.key === key);
+    if (pi !== -1 && !balls[pi]?.dead) balls[pi].vy = -settingVal('jump');
+  }
+});
+
+startBtn.onclick = () => {
+  lobbyEl.style.display = 'none';
+  gameEl.style.display  = 'block';
+  buildHUD();
+  startRound();
+};
+
+document.getElementById('play-again').onclick = resetGame;
+renderLobby();
+
+// ── TRON LEGACY / DAFT PUNK AUDIO ENGINE ───────────────────
+// BPM 138, A minor, Derezzed-inspired sequencer
+
+const BPM       = 138;
+const STEP_S    = 60 / BPM / 4;   // 16th note in seconds
+const LOOKAHEAD = 0.1;             // seconds ahead to schedule
+const SCHEDULE  = 0.05;            // how often to call scheduler (s)
+
+// Derezzed-style arp: 16-step pattern, note index into scale, -1 = rest
+// Scale: A2 A3 C3 D3 E3 G3 A3 C4 (indices 0-7)
+const SCALE = [110, 220, 130.81, 146.83, 164.81, 196, 220, 261.63];
+const ARP_PAT = [0,  -1,  2,  -1,  4,  -1,  6,  5,   4,  -1,  3,  -1,  0,  -1,  2,   4];
+// Bass pattern (note index, -1 = hold previous)
+const BASS_PAT = [0,  -1,  -1,  -1,  0,  -1,  3,  -1,   0,  -1,  -1,  -1,  4,  -1,  3,  -1];
+// Kick: steps 0,8
+const KICK_PAT = [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0];
+// Snare: steps 4,12
+const SNARE_PAT= [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
+// Hi-hat: every 2nd step
+const HHAT_PAT = [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0];
+// Open hat on step 6,14
+const OHAT_PAT = [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,0,1,0];
+
+let audioCtx    = null;
+let nextStepAt  = 0;
+let stepIdx     = 0;
+let schedTimer  = null;
+
+function initAudio() {
+  if (audioCtx) { audioCtx.resume(); return; }
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  audioCtx.resume();
+
+  // Master chain: compressor → gain → out
+  const comp = audioCtx.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.ratio.value = 6;
+  const master = audioCtx.createGain();
+  master.gain.value = 0.72;
+  comp.connect(master); master.connect(audioCtx.destination);
+
+  // Reverb (simple convolver via impulse)
+  const rev = audioCtx.createConvolver();
+  const revGain = audioCtx.createGain(); revGain.gain.value = 0.18;
+  revGain.connect(master);
+  (function buildIR() {
+    const len = audioCtx.sampleRate * 1.8;
+    const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2.5);
+    }
+    rev.buffer = buf;
+  })();
+  rev.connect(revGain);
+
+  // Delay for arp
+  const delay = audioCtx.createDelay(0.5);
+  const delFB  = audioCtx.createGain(); delFB.gain.value = 0.35;
+  const delOut = audioCtx.createGain(); delOut.gain.value = 0.22;
+  delay.delayTime.value = STEP_S * 3;
+  delay.connect(delFB); delFB.connect(delay);
+  delay.connect(delOut); delOut.connect(master);
+
+  function out(node) { node.connect(master); node.connect(rev); }
+
+  // ── DRUM FUNCTIONS ──
+  function kick(t) {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.frequency.setValueAtTime(160, t);
+    o.frequency.exponentialRampToValueAtTime(40, t + 0.08);
+    g.gain.setValueAtTime(1.0, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + 0.3);
+    // click transient
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.01, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * (1 - i/d.length);
+    const click = audioCtx.createBufferSource();
+    const cg = audioCtx.createGain(); cg.gain.value = 0.4;
+    click.buffer = buf; click.connect(cg); cg.connect(master);
+    click.start(t);
+  }
+
+  function snare(t) {
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.18, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/d.length, 1.4);
+    const src = audioCtx.createBufferSource();
+    const flt = audioCtx.createBiquadFilter();
+    flt.type = 'bandpass'; flt.frequency.value = 2200; flt.Q.value = 0.7;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.55, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    src.buffer = buf; src.connect(flt); flt.connect(g); g.connect(master); g.connect(rev);
+    src.start(t);
+  }
+
+  function hihat(t, open) {
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * (open ? 0.12 : 0.04), audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1);
+    const src = audioCtx.createBufferSource();
+    const flt = audioCtx.createBiquadFilter();
+    flt.type = 'highpass'; flt.frequency.value = 7000;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(open ? 0.25 : 0.18, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + (open ? 0.12 : 0.04));
+    src.buffer = buf; src.connect(flt); flt.connect(g); g.connect(master);
+    src.start(t);
+  }
+
+  function arpNote(t, freq) {
+    const o = audioCtx.createOscillator();
+    const flt = audioCtx.createBiquadFilter();
+    const g = audioCtx.createGain();
+    o.type = 'sawtooth'; o.frequency.value = freq;
+    flt.type = 'lowpass'; flt.frequency.value = 3200; flt.Q.value = 2;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.28, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, t + STEP_S * 1.8);
+    o.connect(flt); flt.connect(g);
+    g.connect(master); g.connect(delay); g.connect(rev);
+    o.start(t); o.stop(t + STEP_S * 2);
+  }
+
+  function bassNote(t, freq) {
+    const o  = audioCtx.createOscillator();
+    const o2 = audioCtx.createOscillator();
+    const flt = audioCtx.createBiquadFilter();
+    const g = audioCtx.createGain();
+    o.type = 'sawtooth'; o.frequency.value = freq / 2;
+    o2.type = 'square';  o2.frequency.value = freq / 2;
+    flt.type = 'lowpass';
+    flt.frequency.setValueAtTime(800, t);
+    flt.frequency.exponentialRampToValueAtTime(200, t + STEP_S * 4);
+    flt.Q.value = 3;
+    g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.001, t + STEP_S * 4.5);
+    o.connect(flt); o2.connect(flt); flt.connect(g); g.connect(master);
+    o.start(t); o.stop(t + STEP_S * 5);
+    o2.start(t); o2.stop(t + STEP_S * 5);
+  }
+
+  // ── SCHEDULER ──
+  nextStepAt = audioCtx.currentTime + 0.05;
+  stepIdx = 0;
+
+  function schedule() {
+    while (nextStepAt < audioCtx.currentTime + LOOKAHEAD) {
+      const t = nextStepAt;
+      const s = stepIdx % 16;
+
+      if (KICK_PAT[s])  kick(t);
+      if (SNARE_PAT[s]) snare(t);
+      if (HHAT_PAT[s])  hihat(t, false);
+      if (OHAT_PAT[s])  hihat(t, true);
+
+      const an = ARP_PAT[s];
+      if (an >= 0) arpNote(t, SCALE[an]);
+
+      const bn = BASS_PAT[s];
+      if (bn >= 0) bassNote(t, SCALE[bn] / 2);
+
+      nextStepAt += STEP_S;
+      stepIdx++;
+    }
+    schedTimer = setTimeout(schedule, SCHEDULE * 1000);
+  }
+  schedule();
+}
+
+document.addEventListener('keydown', initAudio, { once: true });
+document.getElementById('start-btn').addEventListener('click', initAudio, { once: true });
+</script>
+</body>
+</html>
