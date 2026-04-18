@@ -33,7 +33,7 @@ app.post('/api/scores', (req, res) => {
   const list = readScores();
   list.push({ name: String(name).trim().slice(0, 20), score, date: new Date().toLocaleDateString('nl-NL') });
   list.sort((a, b) => b.score - a.score);
-  writeScores(list.slice(0, 50));
+  writeScores(list.slice(0, 10));
   res.json({ ok: true });
 });
 

@@ -361,6 +361,7 @@ function renderSettings() {
 
 function resetSettings() {
   SETTINGS.forEach(s => { s.val = s.default; sessionStorage.removeItem(`set_${s.key}`); });
+  settingsModified = false;
   renderSettings();
 }
 
@@ -867,7 +868,7 @@ async function saveHiScore(name, score) {
   } catch {
     hiScoreCache.push({ name: name.trim().slice(0, 20), score, date: new Date().toLocaleDateString('nl-NL') });
     hiScoreCache.sort((a, b) => b.score - a.score);
-    hiScoreCache = hiScoreCache.slice(0, 50);
+    hiScoreCache = hiScoreCache.slice(0, 10);
     localStorage.setItem(HS_GLOBAL_KEY, JSON.stringify(hiScoreCache));
   }
 }
