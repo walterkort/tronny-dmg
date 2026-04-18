@@ -1,31 +1,16 @@
-```
+
 ████████╗██████╗  ██████╗ ███╗   ██╗███╗   ██╗██╗   ██╗    ██████╗ ███╗   ███╗ ██████╗ 
 ╚══██╔══╝██╔══██╗██╔═══██╗████╗  ██║████╗  ██║╚██╗ ██╔╝    ██╔══██╗████╗ ████║██╔════╝ 
    ██║   ██████╔╝██║   ██║██╔██╗ ██║██╔██╗ ██║ ╚████╔╝     ██║  ██║██╔████╔██║██║  ███╗
    ██║   ██╔══██╗██║   ██║██║╚██╗██║██║╚██╗██║  ╚██╔╝      ██║  ██║██║╚██╔╝██║██║   ██║
    ██║   ██║  ██║╚██████╔╝██║ ╚████║██║ ╚████║   ██║       ██████╔╝██║ ╚═╝ ██║╚██████╔╝
    ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═══╝   ╚═╝       ╚═════╝ ╚═╝     ╚═╝ ╚═════╝ 
-```
-
-```
-  ██████╗ ███████╗███████╗██╗   ██╗██╗     ████████╗    ██████╗ ██╗   ██╗
-  ██╔══██╗██╔════╝██╔════╝██║   ██║██║     ╚══██╔══╝    ██╔══██╗╚██╗ ██╔╝
-  ██████╔╝█████╗  ███████╗██║   ██║██║        ██║       ██████╔╝ ╚████╔╝ 
-  ██╔══██╗██╔══╝  ╚════██║██║   ██║██║        ██║       ██╔══██╗  ╚██╔╝  
-  ██║  ██║███████╗███████║╚██████╔╝███████╗   ██║       ██████╔╝   ██║   
-  ╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝ ╚══════╝   ╚═╝       ╚═════╝    ╚═╝   
-```
-
-> *"We hadden een gezellige avond in Birdie's Bar met de Nerdcore groep,*  
-> *besloten Claude Code uit te proberen — en dit is wat er uitkwam."*
-
----
 
 ## Wat is dit?
 
 **TRONNY.DMG** is een lokale 4-speler Flappy Bird, gebouwd in één avond tijdens een Nerdcore-bijeenkomst in **Birdie's Bar**. Het doel: Claude Code uitproberen en kijken hoe ver je in één sessie kunt komen. Het antwoord: een volledig werkend spel met Tron-thema, procedurele audio en een settings-menu.
 
-Geen installatie nodig voor spelers — gewoon een browser openen op het lokale netwerk.
+Geen installatie nodig voor spelers — gewoon een browser openen, toets kiezen en hop door de avond.
 
 ---
 
@@ -80,11 +65,11 @@ Open `http://localhost:3000` — of deel het lokale IP met andere apparaten in h
 
 ## Ontstaan
 
-Op een vrijdagavond in **Birdie's Bar** kwamen we samen als **Nerdcore** — een clubje met een gezonde allergie voor Netflix en een voorkeur voor zelf dingen maken. Het plan: Claude Code uitproberen en kijken wat je in één avond kunt bouwen.
+Op een vrijdagavond in **Birdie's Bar** kwamen we samen als **Nerdcore** bij elkaar. Alex helemaal lyrisch over Claude Code en als z'n agents met wie die de week keurig is doorgekomen; Wij nog een beetje vastgeroest aan onze Cursor IDE en de relatie die we met ChatGPT hebben opgebouwd. Het plan: Claude Code uitproberen en kijken wat je in één avond kunt bouwen.
 
 We begonnen met een reactiespelletje over het netwerk. Het netwerk in het café werkte niet mee. Pivot naar lokaal. Pivot naar Flappy Bird. Pivot naar Tron. Elke keer een stuk beter.
 
-Het resultaat: dit spel. Gebouwd via conversatie met [Claude Code](https://claude.com/claude-code), live gespeeld aan de bar.
+Het resultaat: dit spel. Gebouwd via conversatie met [Claude Code](https://claude.com/claude-code), live gespeeld aan de bar. Barmeisje moest nog even wachten op de pinbetaling en kon gelijk het spelletje spelen, ze ging "stuk".
 
 ---
 
