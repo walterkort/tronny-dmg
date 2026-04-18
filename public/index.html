@@ -116,8 +116,18 @@
     .touch-zone:not(.joined):active { opacity: 0.5; }
 
     /* ── GAME ── */
-    #game { display: none; height: 100dvh; position: relative; }
-    #game canvas { width: 100%; height: 100%; display: block; }
+    #game {
+      display: none; width: 100vw; height: 100dvh; position: relative;
+      align-items: center; justify-content: center;
+      background: #050510;
+      overflow: hidden;
+    }
+    #game.active { display: flex; }
+    #game canvas {
+      display: block;
+      background: #020210;
+      box-shadow: 0 0 40px rgba(0,229,255,0.12);
+    }
 
     #hud {
       position: absolute; inset: 0; pointer-events: none; z-index: 5;
@@ -347,25 +357,51 @@ const BLOCKED = new Set(['escape','tab','capslock','shift','control','alt','meta
 const TOTAL_ROUNDS     = 7;
 const GRAVITY          = 0.17;
 const JUMP_VY          = -5.0;
-const BALL_R           = 13;
-const PIPE_W           = 50;
 const TRON_BLUE = '#00e5ff';
 
+// ── LOGICAL VIEWPORT ───────────────────────────────────────
+// All gameplay runs in a fixed logical coordinate system so the
+// difficulty is identical across devices. The canvas is scaled
+// visually to fit the viewport (letterboxed / pillarboxed).
+const LOGICAL = {
+  portrait:  { W: 720,  H: 1280 },  // mobile default (9:16)
+  landscape: { W: 1280, H: 720  },  // laptop / tablet landscape (16:9)
+};
+let LW = LOGICAL.portrait.W;
+let LH = LOGICAL.portrait.H;
+let orientationMode = 'portrait';
+
+// Reference axis length = short side of both logical canvases (720).
+// All gameplay constants below are expressed in "reference units" and
+// are scaled at runtime so ratios to the canvas stay identical in both
+// orientations. Difficulty cannot be changed by resizing the viewport.
+const REF_AXIS = 720;
+let SY = 1;  // vertical scale = LH / REF_AXIS
+let SX = 1;  // horizontal scale = LW / REF_AXIS
+
+// Base values (in reference units)
+const BALL_R_BASE = 18;
+const PIPE_W_BASE = 60;
+
+// Effective (scaled) values; recomputed in setupViewport()
+let BALL_R = BALL_R_BASE;
+let PIPE_W = PIPE_W_BASE;
+
 // Level thresholds (pipes cleared) → { speed, gap, interval }
-// gap values are fractions of reference height (800px)
+// speed = logical px / frame @ 60fps, gap = logical px, interval = frames
 const LEVELS = [
-  { after: 0,  speed: 1.8, gap: 0.29, interval: 140 },
-  { after: 10, speed: 2.3, gap: 0.25, interval: 125 },
-  { after: 25, speed: 2.8, gap: 0.22, interval: 110 },
-  { after: 45, speed: 3.3, gap: 0.19, interval: 95  },
-  { after: 70, speed: 3.8, gap: 0.17, interval: 82  },
+  { after: 0,  speed: 1.8, gap: 260, interval: 140 },
+  { after: 10, speed: 2.3, gap: 230, interval: 125 },
+  { after: 25, speed: 2.8, gap: 205, interval: 110 },
+  { after: 45, speed: 3.3, gap: 180, interval: 95  },
+  { after: 70, speed: 3.8, gap: 160, interval: 82  },
 ];
 
 // ── SETTINGS ───────────────────────────────────────────────
 const SETTINGS = [
   { key: 'gravity',   label: 'GRAVITY',        min: 0.05, max: 0.40, step: 0.02, default: 0.17, val: 0.17,  fmt: v => v.toFixed(2), hint: 'laag = zweeft' },
   { key: 'jump',      label: 'SPRONG KRACHT',  min: 3.0,  max: 9.0,  step: 0.5,  default: 5.0,  val: 5.0,   fmt: v => v.toFixed(1), hint: 'hoog = hogere stoot' },
-  { key: 'gap',       label: 'OPENING',        min: 100,  max: 320,  step: 10,   default: 220,  val: 220,   fmt: v => v + 'px', hint: 'breed = makkelijker' },
+  { key: 'gap',       label: 'OPENING',        min: 160,  max: 380,  step: 10,   default: 260,  val: 260,   fmt: v => v + 'px', hint: 'breed = makkelijker' },
   { key: 'speed',     label: 'SNELHEID',       min: 0.8,  max: 4.0,  step: 0.2,  default: 1.8,  val: 1.8,   fmt: v => v.toFixed(1) + 'x', hint: '' },
   { key: 'lives',     label: 'LEVENS',         min: 1,    max: 10,   step: 1,    default: 4,    val: 4,     fmt: v => v + '', hint: '' },
   { key: 'rounds',    label: 'RONDES',         min: 1,    max: 20,   step: 1,    default: 3,    val: 3,     fmt: v => v + '', hint: '' },
@@ -447,12 +483,81 @@ let roundStartTime = 0;
 
 let balls = [];
 let pipes = [];
-let gameScale = 1;
 let frameCount   = 0;
 let pipesCleared = 0;
 
 const cv    = document.getElementById('cv');
 const ctx   = cv.getContext('2d');
+
+// ── VIEWPORT / LETTERBOX ──────────────────────────────────
+// Configures canvas backing-store + CSS size + context transform so
+// that all drawing happens in [0..LW, 0..LH] logical units. Called
+// initially and on every resize / orientation change.
+function pickOrientation() {
+  return window.innerWidth >= window.innerHeight ? 'landscape' : 'portrait';
+}
+
+function setupViewport(opts) {
+  const rescale   = opts && opts.rescale;
+  const prevLW    = LW;
+  const prevLH    = LH;
+  const prevMode  = orientationMode;
+  const newMode   = pickOrientation();
+  const L         = LOGICAL[newMode];
+
+  orientationMode = newMode;
+  LW = L.W;
+  LH = L.H;
+
+  // Scale gameplay constants so ratios to canvas are orientation-invariant.
+  SY = LH / REF_AXIS;
+  SX = LW / REF_AXIS;
+  BALL_R = BALL_R_BASE * SY;
+  PIPE_W = PIPE_W_BASE * SX;
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const scale = Math.min(vw / LW, vh / LH);
+  const cssW  = Math.floor(LW * scale);
+  const cssH  = Math.floor(LH * scale);
+  const dpr   = Math.max(1, window.devicePixelRatio || 1);
+
+  cv.width        = Math.round(cssW * dpr);
+  cv.height       = Math.round(cssH * dpr);
+  cv.style.width  = cssW + 'px';
+  cv.style.height = cssH + 'px';
+
+  // reset transform so draw code uses logical coords
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+
+  if (rescale && (prevLW !== LW || prevLH !== LH)) {
+    rescaleWorld(prevLW, prevLH, LW, LH);
+  }
+  return { orientationChanged: prevMode !== newMode };
+}
+
+function rescaleWorld(oldW, oldH, newW, newH) {
+  const sx = newW / oldW;
+  const sy = newH / oldH;
+  balls.forEach(b => { b.x *= sx; b.y *= sy; b.vy *= sy; });
+  pipes.forEach(p => {
+    p.x    *= sx;
+    p.topH *= sy;
+    p.gap  *= sy;
+  });
+}
+
+let __resizeRaf = 0;
+function onViewportChange() {
+  if (__resizeRaf) return;
+  __resizeRaf = requestAnimationFrame(() => {
+    __resizeRaf = 0;
+    setupViewport({ rescale: true });
+  });
+}
+window.addEventListener('resize', onViewportChange);
+window.addEventListener('orientationchange', onViewportChange);
 const lobbyEl  = document.getElementById('lobby');
 const gameEl   = document.getElementById('game');
 const endEl    = document.getElementById('end');
@@ -584,12 +689,13 @@ function getDiff() {
     showLevelUp(lvl + 1);
     setAudioLevel(lvl);
   }
-  const base     = LEVELS[lvl];
-  const baseGapPx  = LEVELS[0].gap * cv.height;
-  const gapDelta   = settingVal('gap') - baseGapPx;
+  const base       = LEVELS[lvl];
+  const gapDelta   = settingVal('gap') - LEVELS[0].gap;
   const spdScale   = settingVal('speed') / LEVELS[0].speed;
-  const gap        = base.gap * cv.height + gapDelta;
-  return { speed: base.speed * spdScale, gap, interval: Math.round(base.interval * spdScale) };
+  // Scale to current orientation: gap is vertical (SY), speed is horizontal (SX).
+  const gap        = Math.max(BALL_R * 3, (base.gap + gapDelta) * SY);
+  const speed      = base.speed * spdScale * SX;
+  return { speed, gap, interval: Math.round(base.interval * spdScale) };
 }
 
 function showLevelUp(n) {
@@ -601,17 +707,16 @@ function showLevelUp(n) {
 
 // ── INIT ───────────────────────────────────────────────────
 function initGame() {
-  cv.width  = gameEl.clientWidth;
-  cv.height = gameEl.clientHeight;
+  setupViewport();
   pipes = []; frameCount = 100; currentLevel = 0; roundWinnerIdx = -1;
   lastFrameTime = 0;
-  gameScale = cv.height / 800;
   setAudioLevel(0);
   roundStartTime = performance.now();
 
+  const spacing = BALL_R * 2.2;
   balls = PLAYERS.map((p, i) => ({
-    x: cv.width * 0.28 - i * (38 * gameScale),
-    y: cv.height * 0.45,
+    x: LW * 0.28 - i * spacing,
+    y: LH * 0.45,
     vy: 0,
     lives: settingVal('lives'),
     dead: false,
@@ -627,6 +732,7 @@ function initGame() {
 
 function respawn(i) {
   const b = balls[i];
+  const spacing = BALL_R * 2.2;
   // smooth nudge: spread over ~30 frames
   let nudgeLeft = 12;
   const nudgeInterval = setInterval(() => {
@@ -636,9 +742,9 @@ function respawn(i) {
     if (nudgeLeft <= 0) clearInterval(nudgeInterval);
   }, 16);
   const minX = balls.reduce((m, b2) => b2.dead || b2 === b ? m : Math.min(m, b2.x), Infinity);
-  const tailX = isFinite(minX) ? minX - 38 : cv.width * 0.28 - i * 38;
+  const tailX = isFinite(minX) ? minX - spacing : LW * 0.28 - i * spacing;
   b.x  = tailX;
-  b.y  = cv.height * 0.45;
+  b.y  = LH * 0.45;
   b.vy = 0;
   b.invincibleUntil = performance.now() + RESPAWN_INVINCIBLE_MS;
 }
@@ -646,9 +752,9 @@ function respawn(i) {
 // ── GAME LOOP ──────────────────────────────────────────────
 function spawnPipe() {
   const d = getDiff();
-  const margin = 60 * gameScale;
-  const minTop = margin, maxTop = cv.height - d.gap - margin;
-  pipes.push({ x: cv.width, topH: minTop + Math.random() * (maxTop - minTop), gap: d.gap, passed: false });
+  const margin = 60 * SY;
+  const minTop = margin, maxTop = LH - d.gap - margin;
+  pipes.push({ x: LW, topH: minTop + Math.random() * (maxTop - minTop), gap: d.gap, passed: false });
 }
 
 let lastFrameTime = 0;
@@ -663,28 +769,28 @@ function tick(ts) {
   lastFrameTime = ts;
   const d   = getDiff();
   const now = performance.now();
-  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.clearRect(0, 0, LW, LH);
 
   // ── background ──
-  const bg = ctx.createLinearGradient(0, 0, 0, cv.height);
+  const bg = ctx.createLinearGradient(0, 0, 0, LH);
   bg.addColorStop(0, '#020210');
   bg.addColorStop(1, '#020a02');
   ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.fillRect(0, 0, LW, LH);
 
   // grid
   ctx.save();
   ctx.strokeStyle = 'rgba(0,200,255,0.04)';
   ctx.lineWidth = 1;
   const gs = 50;
-  for (let x = 0; x < cv.width; x += gs)  { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x, cv.height); ctx.stroke(); }
-  for (let y = 0; y < cv.height; y += gs) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(cv.width, y); ctx.stroke(); }
+  for (let x = 0; x < LW; x += gs) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x, LH); ctx.stroke(); }
+  for (let y = 0; y < LH; y += gs) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(LW, y); ctx.stroke(); }
   ctx.restore();
 
   // scanline overlay
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.07)';
-  for (let y = 0; y < cv.height; y += 4) { ctx.fillRect(0, y, cv.width, 2); }
+  for (let y = 0; y < LH; y += 4) { ctx.fillRect(0, y, LW, 2); }
   ctx.restore();
 
   // ── pipes ──
@@ -694,7 +800,7 @@ function tick(ts) {
   pipes.forEach(p => {
     p.x -= d.speed * dt;
 
-    const pw   = PIPE_W * gameScale;
+    const pw   = PIPE_W;
     const botY = p.topH + p.gap;
     const R    = pw / 2;
 
@@ -704,47 +810,48 @@ function tick(ts) {
     ctx.save();
 
     ctx.fillStyle = dark;
-    ctx.beginPath(); ctx.roundRect(p.x, 0,    pw, p.topH,           [0,0,R,R]); ctx.fill();
-    ctx.beginPath(); ctx.roundRect(p.x, botY,  pw, cv.height - botY, [R,R,0,0]); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(p.x, 0,    pw, p.topH,    [0,0,R,R]); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(p.x, botY, pw, LH - botY, [R,R,0,0]); ctx.fill();
 
     ctx.strokeStyle = neon;
     ctx.lineWidth   = 2.5;
     ctx.shadowColor = neon;
     ctx.shadowBlur  = 20;
-    ctx.beginPath(); ctx.roundRect(p.x, 0,    pw, p.topH,           [0,0,R,R]); ctx.stroke();
-    ctx.beginPath(); ctx.roundRect(p.x, botY,  pw, cv.height - botY, [R,R,0,0]); ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(p.x, 0,    pw, p.topH,    [0,0,R,R]); ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(p.x, botY, pw, LH - botY, [R,R,0,0]); ctx.stroke();
 
     ctx.strokeStyle = 'rgba(0,229,255,0.2)';
     ctx.lineWidth   = 1; ctx.shadowBlur = 0;
-    ctx.beginPath(); ctx.moveTo(p.x + 7, 0);    ctx.lineTo(p.x + 7, p.topH);     ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(p.x + 7, botY); ctx.lineTo(p.x + 7, cv.height);  ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.x + 7, 0);    ctx.lineTo(p.x + 7, p.topH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.x + 7, botY); ctx.lineTo(p.x + 7, LH);     ctx.stroke();
 
     ctx.restore();
 
-    const br = BALL_R * gameScale;
+    const br = BALL_R;
     balls.forEach((b, bi) => {
       if (!b.dead && !p.cleared?.[bi] && p.x + pw < b.x - br) {
         (p.cleared ??= {})[bi] = true;
         b.pipesThisRound++;
         updateScoreHUD();
+        onPipePassed(bi, b.pipesThisRound);
       }
     });
   });
-  pipes = pipes.filter(p => p.x + PIPE_W * gameScale > 0);
+  pipes = pipes.filter(p => p.x + PIPE_W > 0);
 
   // ── balls ──
-  const br = BALL_R * gameScale;
+  const br = BALL_R;
   balls.forEach((b, i) => {
     if (b.dead) return;
 
-    b.vy += settingVal('gravity') * dt;
+    b.vy += settingVal('gravity') * SY * dt;
     b.y  += b.vy * dt;
 
     const invincible = now < b.invincibleUntil;
-    const pw = PIPE_W * gameScale;
+    const pw = PIPE_W;
 
     if (!invincible) {
-      if (b.y - br < 0 || b.y + br > cv.height) { hitBall(i); return; }
+      if (b.y - br < 0 || b.y + br > LH) { hitBall(i); return; }
       for (const p of pipes) {
         const inX     = b.x + br > p.x && b.x - br < p.x + pw;
         const hitsTop = b.y - br < p.topH;
@@ -752,8 +859,8 @@ function tick(ts) {
         if (inX && (hitsTop || hitsBot)) { hitBall(i); return; }
       }
     } else {
-      if (b.y - br < 0)         { b.y = br; b.vy = 0; }
-      if (b.y + br > cv.height) { b.y = cv.height - br; b.vy = 0; }
+      if (b.y - br < 0)  { b.y = br; b.vy = 0; }
+      if (b.y + br > LH) { b.y = LH - br; b.vy = 0; }
     }
 
     drawBall(b.x, b.y, b.color, b.vy, invincible, now, i, br);
@@ -764,13 +871,13 @@ function tick(ts) {
   const elapsed = now - roundStartTime;
   if (elapsed < totalInvTime) {
     const frac = 1 - elapsed / totalInvTime;
-    const barW = cv.width * frac;
+    const barW = LW * frac;
     ctx.save();
     ctx.shadowColor = '#00ffe0'; ctx.shadowBlur = 8;
     ctx.fillStyle = '#00ffe044';
-    ctx.fillRect(0, cv.height - 4, barW, 4);
+    ctx.fillRect(0, LH - 4, barW, 4);
     ctx.fillStyle = '#00ffe0';
-    ctx.fillRect(0, cv.height - 4, barW, 2);
+    ctx.fillRect(0, LH - 4, barW, 2);
     ctx.restore();
   }
 }
@@ -781,7 +888,7 @@ function drawBall(x, y, color, vy, invincible, now, idx, br = BALL_R) {
 
   if (invincible) {
     const pulse = 0.5 + 0.5 * Math.sin(now * 0.009);
-    const sr = br + 7 * gameScale + pulse * 5 * gameScale;
+    const sr = br + (7 + pulse * 5) * SY;
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
@@ -810,7 +917,7 @@ function drawBall(x, y, color, vy, invincible, now, idx, br = BALL_R) {
 
   ctx.shadowColor = color; ctx.shadowBlur = 12;
   ctx.fillStyle   = color;
-  ctx.beginPath(); ctx.arc(0, 0, 3 * gameScale, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, 3 * SY, 0, Math.PI * 2); ctx.fill();
 
   ctx.restore();
 }
@@ -823,6 +930,7 @@ function hitBall(i) {
   const b = balls[i];
   b.lives--;
   updateLivesHUD();
+  onHit(i);
 
   if (b.lives <= 0) {
     b.dead = true;
@@ -1074,7 +1182,10 @@ document.addEventListener('keydown', e => {
 
   if (phase === 'playing') {
     const pi = PLAYERS.findIndex(p => p.key === key);
-    if (pi !== -1 && !balls[pi]?.dead) balls[pi].vy = -settingVal('jump');
+    if (pi !== -1 && !balls[pi]?.dead) {
+      balls[pi].vy = -settingVal('jump') * SY;
+      onFlap(pi);
+    }
   }
 });
 
@@ -1101,7 +1212,10 @@ document.getElementById('game').addEventListener('touchstart', e => {
   Array.from(e.changedTouches).forEach(t => {
     const ci = getTouchCorner(t);
     const pi = PLAYERS.findIndex(p => p.cornerIdx === ci);
-    if (pi !== -1 && !balls[pi]?.dead) balls[pi].vy = -settingVal('jump');
+    if (pi !== -1 && !balls[pi]?.dead) {
+      balls[pi].vy = -settingVal('jump') * SY;
+      onFlap(pi);
+    }
   });
 }, { passive: false });
 
@@ -1109,7 +1223,8 @@ startBtn.onclick = () => {
   PLAYERS.forEach(p => { p.score = 0; p.totalPipes = 0; });
   document.getElementById('touch-overlay').classList.remove('active');
   lobbyEl.style.display = 'none';
-  gameEl.style.display  = 'block';
+  gameEl.style.display  = 'flex';
+  setupViewport();
   buildHUD();
   startRound();
 };
@@ -1117,184 +1232,432 @@ startBtn.onclick = () => {
 document.getElementById('play-again').onclick = resetGame;
 renderLobby();
 
-// ── TRON LEGACY / DAFT PUNK AUDIO ENGINE ───────────────────
-// BPM 138, A minor, Derezzed-inspired sequencer
+// ── DAFT PUNK / TRON LEGACY AUDIO ENGINE ──────────────────
+//  • Evolving supersaw pad, sidechain-ducked by the kick (classic DP pump)
+//  • 4-bar chord loop Am → F → C → G with long filter sweeps
+//  • Layers gated by audioIntensity (level) + audioVariation (pipes)
+//  • onFlap()  → musical in-key pluck
+//  • onPipePassed() → reward stab + bell + ramps variation up
+//  • onHit()   → disintegrate whoosh
 
-const LEVEL_BPM = [138, 150, 163, 178, 195];
-const LOOKAHEAD = 0.1;
-const SCHEDULE  = 0.05;
+const LEVEL_BPM = [124, 128, 132, 138, 144];
+const LOOKAHEAD = 0.12;
+const SCHEDULE  = 0.025;
 
-let stepS      = 60 / LEVEL_BPM[0] / 4;
-let audioDelay = null;
+// 4-bar chord progression (vi-IV-I-V in C major / A minor feel)
+//   root  = bass note (Hz), tones = chord voicing (Hz)
+const CHORDS = [
+  { root: 55.00, tones: [220.00, 261.63, 329.63, 392.00] }, // Am
+  { root: 43.65, tones: [174.61, 220.00, 261.63, 349.23] }, // F
+  { root: 65.41, tones: [196.00, 261.63, 329.63, 392.00] }, // C
+  { root: 49.00, tones: [196.00, 246.94, 293.66, 392.00] }, // G
+];
 
-// Derezzed-style arp: 16-step pattern, note index into scale, -1 = rest
-// Scale: A2 A3 C3 D3 E3 G3 A3 C4 (indices 0-7)
-const SCALE = [110, 220, 130.81, 146.83, 164.81, 196, 220, 261.63];
-const ARP_PAT = [0,  -1,  2,  -1,  4,  -1,  6,  5,   4,  -1,  3,  -1,  0,  -1,  2,   4];
-// Bass pattern (note index, -1 = hold previous)
-const BASS_PAT = [0,  -1,  -1,  -1,  0,  -1,  3,  -1,   0,  -1,  -1,  -1,  4,  -1,  3,  -1];
-// Kick: steps 0,8
-const KICK_PAT = [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0];
-// Snare: steps 4,12
-const SNARE_PAT= [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
-// Hi-hat: every 2nd step
-const HHAT_PAT = [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0];
-// Open hat on step 6,14
-const OHAT_PAT = [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,0,1,0];
+// 16 steps per bar
+const KICK_PAT  = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]; // 4-on-the-floor
+const SNARE_PAT = [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
+const CLAP_PAT  = [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
+const HHAT_PAT  = [0,1,1,1, 0,1,1,1, 0,1,1,1, 0,1,1,1]; // offbeats + ghosts
+const OHAT_PAT  = [0,0,1,0, 0,0,1,0, 0,0,1,0, 0,0,1,0];
+const ARP_PAT   = [0,2,3,2, 0,2,3,2, 1,2,3,2, 0,2,3,2]; // indices into chord.tones
+const BASS_PAT  = [1,0,0,1, 0,0,1,0, 1,0,0,1, 0,1,0,1]; // funky bounce
 
-let audioCtx   = null;
-let nextStepAt = 0;
-let stepIdx    = 0;
-let schedTimer = null;
+let stepS       = 60 / LEVEL_BPM[0] / 4;
+let audioCtx    = null;
+let masterBus   = null;
+let padBus      = null;   // pad goes through sidechain VCA
+let sideGain    = null;
+let padFilter   = null;
+let padOscs     = [];     // running supersaw voices
+let audioDelay  = null;
+let audioRev    = null;
+let leadFilter  = null;
+let nextStepAt  = 0;
+let stepIdx     = 0;
+let schedTimer  = null;
+let barCount    = 0;
+let currentChord = 0;
+let audioIntensity = 0.25;  // 0..1 from game level
+let audioVariation = 0;     // 0..1 from pipe passes (decays over time)
+let audioReady  = false;
 
 function setAudioLevel(lvl) {
-  const bpm = LEVEL_BPM[Math.min(lvl, LEVEL_BPM.length - 1)];
+  const maxLvl = LEVEL_BPM.length - 1;
+  const bpm = LEVEL_BPM[Math.min(lvl, maxLvl)];
   stepS = 60 / bpm / 4;
-  if (audioDelay) audioDelay.delayTime.setTargetAtTime(stepS * 3, audioCtx.currentTime, 0.05);
+  audioIntensity = 0.25 + 0.75 * Math.min(lvl, maxLvl) / maxLvl;
+  if (audioCtx) {
+    if (audioDelay) audioDelay.delayTime.setTargetAtTime(stepS * 3, audioCtx.currentTime, 0.1);
+    if (leadFilter) leadFilter.frequency.setTargetAtTime(1400 + audioIntensity * 4200, audioCtx.currentTime, 0.8);
+  }
 }
 
 function initAudio() {
   if (audioCtx) { audioCtx.resume(); return; }
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   audioCtx.resume();
+  const now = audioCtx.currentTime;
 
-  // Master chain: compressor → gain → out
+  // ── master bus ──
   const comp = audioCtx.createDynamicsCompressor();
-  comp.threshold.value = -14; comp.ratio.value = 6;
-  const master = audioCtx.createGain();
-  master.gain.value = 0.72;
-  comp.connect(master); master.connect(audioCtx.destination);
+  comp.threshold.value = -12; comp.ratio.value = 5; comp.attack.value = 0.003; comp.release.value = 0.18;
+  masterBus = audioCtx.createGain(); masterBus.gain.value = 0.7;
+  comp.connect(masterBus); masterBus.connect(audioCtx.destination);
 
-  // Reverb (simple convolver via impulse)
-  const rev = audioCtx.createConvolver();
-  const revGain = audioCtx.createGain(); revGain.gain.value = 0.18;
-  revGain.connect(master);
+  // ── reverb (impulse-built convolver) ──
+  audioRev = audioCtx.createConvolver();
+  const revSend = audioCtx.createGain(); revSend.gain.value = 0.22;
+  revSend.connect(masterBus);
   (function buildIR() {
-    const len = audioCtx.sampleRate * 1.8;
+    const len = audioCtx.sampleRate * 2.2;
     const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
     for (let c = 0; c < 2; c++) {
       const d = buf.getChannelData(c);
-      for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2.5);
+      for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2.8);
     }
-    rev.buffer = buf;
+    audioRev.buffer = buf;
   })();
-  rev.connect(revGain);
+  audioRev.connect(revSend);
 
-  // Delay for arp
-  audioDelay = audioCtx.createDelay(0.5);
-  const delay = audioDelay;
-  const delFB  = audioCtx.createGain(); delFB.gain.value = 0.35;
-  const delOut = audioCtx.createGain(); delOut.gain.value = 0.22;
-  delay.delayTime.value = stepS * 3;
-  delay.connect(delFB); delFB.connect(delay);
-  delay.connect(delOut); delOut.connect(master);
+  // ── delay (sync'd to 3/16ths) ──
+  audioDelay = audioCtx.createDelay(0.8);
+  const delFB  = audioCtx.createGain(); delFB.gain.value = 0.36;
+  const delOut = audioCtx.createGain(); delOut.gain.value = 0.24;
+  audioDelay.delayTime.value = stepS * 3;
+  audioDelay.connect(delFB); delFB.connect(audioDelay);
+  audioDelay.connect(delOut); delOut.connect(masterBus);
 
-  function out(node) { node.connect(master); node.connect(rev); }
+  // ── lead filter (arp bus) — slowly opens as variation climbs ──
+  leadFilter = audioCtx.createBiquadFilter();
+  leadFilter.type = 'lowpass';
+  leadFilter.frequency.value = 1600;
+  leadFilter.Q.value = 3;
+  leadFilter.connect(masterBus);
+  leadFilter.connect(audioDelay);
+  leadFilter.connect(audioRev);
 
-  // ── DRUM FUNCTIONS ──
+  // ── sidechain VCA for the pad (ducked on every kick) ──
+  sideGain = audioCtx.createGain(); sideGain.gain.value = 1.0;
+  padBus = audioCtx.createGain(); padBus.gain.value = 0.0;
+  sideGain.connect(padBus); padBus.connect(masterBus); padBus.connect(audioRev);
+
+  // ── pad filter + slow LFO (breathing, ~14s cycle) ──
+  padFilter = audioCtx.createBiquadFilter();
+  padFilter.type = 'lowpass';
+  padFilter.frequency.value = 900;
+  padFilter.Q.value = 0.8;
+  padFilter.connect(sideGain);
+  const padLFO = audioCtx.createOscillator();
+  const padLFOGain = audioCtx.createGain();
+  padLFO.type = 'sine'; padLFO.frequency.value = 1/14;
+  padLFOGain.gain.value = 1800;
+  padLFO.connect(padLFOGain); padLFOGain.connect(padFilter.frequency);
+  padLFO.start(now);
+
+  // ── long-running supersaw pad (3 detunes × 4 chord tones = 12 oscs) ──
+  const initChord = CHORDS[0];
+  padOscs = [];
+  initChord.tones.forEach(freq => {
+    [-12, 0, 12].forEach(cents => {
+      const o = audioCtx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = freq;
+      o.detune.value = cents;
+      o.connect(padFilter);
+      o.start(now);
+      padOscs.push(o);
+    });
+  });
+  padBus.gain.linearRampToValueAtTime(0.16, now + 3.5);
+
+  // ── voice factories ──
   function kick(t) {
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
-    o.frequency.setValueAtTime(160, t);
-    o.frequency.exponentialRampToValueAtTime(40, t + 0.08);
+    o.frequency.setValueAtTime(170, t);
+    o.frequency.exponentialRampToValueAtTime(42, t + 0.09);
     g.gain.setValueAtTime(1.0, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
-    o.connect(g); g.connect(master);
-    o.start(t); o.stop(t + 0.3);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    o.connect(g); g.connect(masterBus);
+    o.start(t); o.stop(t + 0.32);
     // click transient
-    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.01, audioCtx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * (1 - i/d.length);
+    const clickBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.008, audioCtx.sampleRate);
+    const cd = clickBuf.getChannelData(0);
+    for (let i = 0; i < cd.length; i++) cd[i] = (Math.random()*2-1) * (1 - i/cd.length);
     const click = audioCtx.createBufferSource();
-    const cg = audioCtx.createGain(); cg.gain.value = 0.4;
-    click.buffer = buf; click.connect(cg); cg.connect(master);
+    const cg = audioCtx.createGain(); cg.gain.value = 0.5;
+    click.buffer = clickBuf; click.connect(cg); cg.connect(masterBus);
     click.start(t);
+    // sidechain duck
+    sideGain.gain.cancelScheduledValues(t);
+    sideGain.gain.setValueAtTime(0.28, t);
+    sideGain.gain.linearRampToValueAtTime(1.0, t + stepS * 3.6);
   }
 
-  function snare(t) {
-    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.18, audioCtx.sampleRate);
+  function snare(t, gain = 0.55) {
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.2, audioCtx.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/d.length, 1.4);
     const src = audioCtx.createBufferSource();
     const flt = audioCtx.createBiquadFilter();
-    flt.type = 'bandpass'; flt.frequency.value = 2200; flt.Q.value = 0.7;
+    flt.type = 'bandpass'; flt.frequency.value = 2300; flt.Q.value = 0.7;
     const g = audioCtx.createGain();
-    g.gain.setValueAtTime(0.55, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-    src.buffer = buf; src.connect(flt); flt.connect(g); g.connect(master); g.connect(rev);
+    g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    src.buffer = buf; src.connect(flt); flt.connect(g); g.connect(masterBus); g.connect(audioRev);
     src.start(t);
   }
 
+  function clap(t) {
+    // 3 short bursts for the classic "cl-l-lap"
+    for (let k = 0; k < 3; k++) {
+      const tt = t + k * 0.012;
+      const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.06, audioCtx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/d.length, 2);
+      const src = audioCtx.createBufferSource();
+      const flt = audioCtx.createBiquadFilter();
+      flt.type = 'bandpass'; flt.frequency.value = 1700; flt.Q.value = 1.1;
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.28, tt); g.gain.exponentialRampToValueAtTime(0.001, tt + 0.08);
+      src.buffer = buf; src.connect(flt); flt.connect(g); g.connect(masterBus); g.connect(audioRev);
+      src.start(tt);
+    }
+  }
+
   function hihat(t, open) {
-    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * (open ? 0.12 : 0.04), audioCtx.sampleRate);
+    const dur = open ? 0.14 : 0.04;
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1);
     const src = audioCtx.createBufferSource();
     const flt = audioCtx.createBiquadFilter();
-    flt.type = 'highpass'; flt.frequency.value = 7000;
+    flt.type = 'highpass'; flt.frequency.value = 7200;
     const g = audioCtx.createGain();
-    g.gain.setValueAtTime(open ? 0.25 : 0.18, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + (open ? 0.12 : 0.04));
-    src.buffer = buf; src.connect(flt); flt.connect(g); g.connect(master);
+    g.gain.setValueAtTime(open ? 0.22 : 0.14, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.buffer = buf; src.connect(flt); flt.connect(g); g.connect(masterBus);
     src.start(t);
   }
 
-  function arpNote(t, freq) {
+  function arpNote(t, freq, vel = 1.0) {
     const o = audioCtx.createOscillator();
-    const flt = audioCtx.createBiquadFilter();
+    const o2 = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     o.type = 'sawtooth'; o.frequency.value = freq;
-    flt.type = 'lowpass'; flt.frequency.value = 3200; flt.Q.value = 2;
+    o2.type = 'sawtooth'; o2.frequency.value = freq; o2.detune.value = 7;
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.28, t + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.001, t + stepS * 1.8);
-    o.connect(flt); flt.connect(g);
-    g.connect(master); g.connect(delay); g.connect(rev);
-    o.start(t); o.stop(t + stepS * 2);
+    g.gain.linearRampToValueAtTime(0.26 * vel, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, t + stepS * 2);
+    o.connect(g); o2.connect(g); g.connect(leadFilter);
+    o.start(t); o.stop(t + stepS * 2.2);
+    o2.start(t); o2.stop(t + stepS * 2.2);
   }
 
-  function bassNote(t, freq) {
+  function bassNote(t, freq, vel = 1.0) {
     const o  = audioCtx.createOscillator();
     const o2 = audioCtx.createOscillator();
     const flt = audioCtx.createBiquadFilter();
     const g = audioCtx.createGain();
-    o.type = 'sawtooth'; o.frequency.value = freq / 2;
-    o2.type = 'square';  o2.frequency.value = freq / 2;
+    o.type = 'sawtooth'; o.frequency.value = freq;
+    o2.type = 'square';  o2.frequency.value = freq; o2.detune.value = -7;
     flt.type = 'lowpass';
-    flt.frequency.setValueAtTime(800, t);
-    flt.frequency.exponentialRampToValueAtTime(200, t + stepS * 4);
-    flt.Q.value = 3;
-    g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.001, t + stepS * 4.5);
-    o.connect(flt); o2.connect(flt); flt.connect(g); g.connect(master);
-    o.start(t); o.stop(t + stepS * 5);
-    o2.start(t); o2.stop(t + stepS * 5);
+    flt.frequency.setValueAtTime(900 + audioIntensity * 500, t);
+    flt.frequency.exponentialRampToValueAtTime(220, t + stepS * 3.2);
+    flt.Q.value = 4;
+    g.gain.setValueAtTime(0.58 * vel, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + stepS * 3.5);
+    o.connect(flt); o2.connect(flt); flt.connect(g); g.connect(masterBus);
+    o.start(t); o.stop(t + stepS * 4);
+    o2.start(t); o2.stop(t + stepS * 4);
   }
 
-  // ── SCHEDULER ──
+  // expose internals for live FX hooks
+  initAudio._kick = kick;
+  initAudio._snare = snare;
+  initAudio._clap = clap;
+  initAudio._hihat = hihat;
+  initAudio._arpNote = arpNote;
+  initAudio._bassNote = bassNote;
+
+  // ── chord changer (smooth glide pad to new chord) ──
+  function setChord(idx) {
+    currentChord = idx;
+    const chord = CHORDS[idx];
+    const t = audioCtx.currentTime;
+    padOscs.forEach((osc, i) => {
+      const toneIdx = Math.floor(i / 3);
+      osc.frequency.setTargetAtTime(chord.tones[toneIdx], t, 0.12);
+    });
+  }
+  initAudio._setChord = setChord;
+
+  // ── scheduler ──
   nextStepAt = audioCtx.currentTime + 0.05;
   stepIdx = 0;
+  barCount = 0;
 
   function schedule() {
     while (nextStepAt < audioCtx.currentTime + LOOKAHEAD) {
       const t = nextStepAt;
       const s = stepIdx % 16;
+      if (s === 0) {
+        barCount++;
+        setChord(barCount % CHORDS.length);
+      }
+      const intensity = audioIntensity;
+      const variation = audioVariation;
+      const chord = CHORDS[currentChord];
 
-      if (KICK_PAT[s])  kick(t);
-      if (SNARE_PAT[s]) snare(t);
-      if (HHAT_PAT[s])  hihat(t, false);
-      if (OHAT_PAT[s])  hihat(t, true);
+      if (KICK_PAT[s]) kick(t);
+      if (SNARE_PAT[s]) snare(t, 0.45 + intensity * 0.15);
+      if (HHAT_PAT[s]) hihat(t, false);
+      if (OHAT_PAT[s] && intensity > 0.35) hihat(t, true);
+      if (CLAP_PAT[s] && (variation > 0.25 || intensity > 0.6)) clap(t);
 
-      const an = ARP_PAT[s];
-      if (an >= 0) arpNote(t, SCALE[an]);
+      // arp — odd steps only kick in with variation / intensity
+      const a = ARP_PAT[s];
+      if (a >= 0 && (s % 2 === 0 || variation > 0.35 || intensity > 0.7)) {
+        arpNote(t, chord.tones[a] * 2, 0.75 + variation * 0.25);
+      }
 
-      const bn = BASS_PAT[s];
-      if (bn >= 0) bassNote(t, SCALE[bn] / 2);
+      // bass — drop some notes at low intensity for space
+      if (BASS_PAT[s] && (s % 4 === 0 || intensity > 0.45)) {
+        bassNote(t, chord.root, 0.8 + intensity * 0.2);
+      }
+
+      // bar-end snare roll on high variation
+      if (s === 14 && variation > 0.7 && (barCount % 4 === 0)) {
+        snare(t + stepS * 0.5, 0.35);
+        snare(t + stepS,       0.45);
+      }
 
       nextStepAt += stepS;
       stepIdx++;
     }
+    // slow variation decay (~15s from full to zero)
+    audioVariation = Math.max(0, audioVariation - 0.0009);
     schedTimer = setTimeout(schedule, SCHEDULE * 1000);
   }
   schedule();
+
+  audioReady = true;
+}
+
+// ── LIVE FX HOOKS ────────────────────────────────────────────
+// onFlap: musical pluck, note picked from current chord + player index
+function onFlap(playerIdx = 0) {
+  if (!audioReady) return;
+  const t = audioCtx.currentTime;
+  const chord = CHORDS[currentChord];
+  const note = chord.tones[(playerIdx + stepIdx) % chord.tones.length] * 2;
+  const o = audioCtx.createOscillator();
+  const f = audioCtx.createBiquadFilter();
+  const g = audioCtx.createGain();
+  o.type = 'square';
+  o.frequency.setValueAtTime(note * 1.005, t);
+  o.frequency.exponentialRampToValueAtTime(note, t + 0.12);
+  f.type = 'lowpass';
+  f.frequency.setValueAtTime(5200, t);
+  f.frequency.exponentialRampToValueAtTime(900, t + 0.22);
+  f.Q.value = 6;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.18, t + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+  o.connect(f); f.connect(g); g.connect(masterBus); g.connect(audioDelay);
+  o.start(t); o.stop(t + 0.3);
+}
+
+// onPipePassed: reward stab on current chord + FM bell + bump variation
+function onPipePassed(playerIdx = 0, count = 0) {
+  if (!audioReady) return;
+  audioVariation = Math.min(1, audioVariation + 0.18);
+  const t = audioCtx.currentTime + 0.005;
+  const chord = CHORDS[currentChord];
+
+  // 3-voice chord stab (supersaw-ish)
+  chord.tones.slice(1).forEach((freq, i) => {
+    const o = audioCtx.createOscillator();
+    const f = audioCtx.createBiquadFilter();
+    const g = audioCtx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.value = freq * 2;
+    o.detune.value = (i - 1) * 6 + (playerIdx * 3);
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(6500, t);
+    f.frequency.exponentialRampToValueAtTime(1000, t + 0.55);
+    f.Q.value = 3;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.11, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+    o.connect(f); f.connect(g); g.connect(masterBus); g.connect(audioRev); g.connect(audioDelay);
+    o.start(t); o.stop(t + 0.65);
+  });
+
+  // FM bell chime — adds "Veridis Quo" sparkle
+  const car = audioCtx.createOscillator();
+  const mod = audioCtx.createOscillator();
+  const modG = audioCtx.createGain();
+  const bg = audioCtx.createGain();
+  car.type = 'sine';
+  mod.type = 'sine';
+  car.frequency.value = chord.tones[3] * 4;
+  mod.frequency.value = chord.tones[3] * 7;
+  modG.gain.value = 550;
+  mod.connect(modG); modG.connect(car.frequency);
+  bg.gain.setValueAtTime(0.16, t);
+  bg.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+  car.connect(bg); bg.connect(masterBus); bg.connect(audioRev);
+  car.start(t); mod.start(t);
+  car.stop(t + 1.5); mod.stop(t + 1.5);
+
+  // every 5th pipe → riser whoosh
+  if (count > 0 && count % 5 === 0) {
+    const noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.9, audioCtx.sampleRate);
+    const nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = (Math.random()*2-1);
+    const src = audioCtx.createBufferSource();
+    const flt = audioCtx.createBiquadFilter();
+    const g   = audioCtx.createGain();
+    src.buffer = noiseBuf;
+    flt.type = 'bandpass'; flt.Q.value = 4;
+    flt.frequency.setValueAtTime(400, t);
+    flt.frequency.exponentialRampToValueAtTime(9000, t + 0.85);
+    g.gain.setValueAtTime(0.0, t);
+    g.gain.linearRampToValueAtTime(0.18, t + 0.8);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.95);
+    src.connect(flt); flt.connect(g); g.connect(masterBus); g.connect(audioRev);
+    src.start(t);
+  }
+}
+
+// onHit: disintegrate / derezz whoosh
+function onHit(playerIdx = 0) {
+  if (!audioReady) return;
+  const t = audioCtx.currentTime;
+  // pitched-down sine thud
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(180, t);
+  o.frequency.exponentialRampToValueAtTime(35, t + 0.55);
+  g.gain.setValueAtTime(0.5, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+  o.connect(g); g.connect(masterBus); g.connect(audioRev);
+  o.start(t); o.stop(t + 0.65);
+  // noise burst
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.35, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * (1 - i/d.length);
+  const src = audioCtx.createBufferSource();
+  const flt = audioCtx.createBiquadFilter();
+  const ng = audioCtx.createGain();
+  flt.type = 'bandpass'; flt.Q.value = 2;
+  flt.frequency.setValueAtTime(2500, t);
+  flt.frequency.exponentialRampToValueAtTime(200, t + 0.35);
+  ng.gain.setValueAtTime(0.32, t);
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+  src.buffer = buf; src.connect(flt); flt.connect(ng); ng.connect(masterBus); ng.connect(audioRev);
+  src.start(t);
 }
 
 document.addEventListener('keydown', initAudio, { once: true });
