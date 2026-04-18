@@ -75,6 +75,10 @@
     #settings .s-title {
       font-size: 0.65rem; letter-spacing: 3px; opacity: 0.35; margin-bottom: 4px;
     }
+    .s-cheat {
+      font-size: 0.65rem; letter-spacing: 2px; color: #ff6644;
+      text-shadow: 0 0 8px #ff664466; opacity: 0.9; margin-bottom: 2px;
+    }
     .s-row {
       display: flex; align-items: center; justify-content: space-between;
       padding: 4px 6px; border-radius: 3px; gap: 16px;
@@ -351,7 +355,8 @@ function settingVal(key) { return SETTINGS.find(s => s.key === key).val; }
 
 function renderSettings() {
   const el = document.getElementById('settings');
-  el.innerHTML = `<div class="s-title">// INSTELLINGEN &nbsp; ↑↓ KIEZEN &nbsp; ←→ AANPASSEN &nbsp; R RESET</div>` +
+  el.innerHTML = `<div class="s-title">// INSTELLINGEN &nbsp; ↑↓ KIEZEN &nbsp; ←→ AANPASSEN &nbsp; R RESET</div>
+    ${settingsModified ? '<div class="s-cheat">⚠ INSTELLINGEN AANGEPAST — SCORE TELT NIET</div>' : ''}` +
     SETTINGS.map((s, i) => `
       <div class="s-row ${i === settingSel ? 'selected' : ''}">
         <span class="s-label">${s.label}</span>
