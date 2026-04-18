@@ -381,7 +381,7 @@ let SX = 1;  // horizontal scale = LW / REF_AXIS
 
 // Base values (in reference units)
 const BALL_R_BASE = 18;
-const PIPE_W_BASE = 60;
+const PIPE_W_BASE = 32;
 
 // Effective (scaled) values; recomputed in setupViewport()
 let BALL_R = BALL_R_BASE;
@@ -390,19 +390,19 @@ let PIPE_W = PIPE_W_BASE;
 // Level thresholds (pipes cleared) → { speed, gap, interval }
 // speed = logical px / frame @ 60fps, gap = logical px, interval = frames
 const LEVELS = [
-  { after: 0,  speed: 1.8, gap: 260, interval: 140 },
-  { after: 10, speed: 2.3, gap: 230, interval: 125 },
-  { after: 25, speed: 2.8, gap: 205, interval: 110 },
-  { after: 45, speed: 3.3, gap: 180, interval: 95  },
-  { after: 70, speed: 3.8, gap: 160, interval: 82  },
+  { after: 0,  speed: 2.1, gap: 200, interval: 125 },
+  { after: 10, speed: 2.6, gap: 178, interval: 112 },
+  { after: 25, speed: 3.1, gap: 160, interval: 98  },
+  { after: 45, speed: 3.6, gap: 142, interval: 86  },
+  { after: 70, speed: 4.1, gap: 126, interval: 74  },
 ];
 
 // ── SETTINGS ───────────────────────────────────────────────
 const SETTINGS = [
   { key: 'gravity',   label: 'GRAVITY',        min: 0.05, max: 0.40, step: 0.02, default: 0.17, val: 0.17,  fmt: v => v.toFixed(2), hint: 'laag = zweeft' },
   { key: 'jump',      label: 'SPRONG KRACHT',  min: 3.0,  max: 9.0,  step: 0.5,  default: 5.0,  val: 5.0,   fmt: v => v.toFixed(1), hint: 'hoog = hogere stoot' },
-  { key: 'gap',       label: 'OPENING',        min: 160,  max: 380,  step: 10,   default: 260,  val: 260,   fmt: v => v + 'px', hint: 'breed = makkelijker' },
-  { key: 'speed',     label: 'SNELHEID',       min: 0.8,  max: 4.0,  step: 0.2,  default: 1.8,  val: 1.8,   fmt: v => v.toFixed(1) + 'x', hint: '' },
+  { key: 'gap',       label: 'OPENING',        min: 130,  max: 340,  step: 10,   default: 200,  val: 200,   fmt: v => v + 'px', hint: 'breed = makkelijker' },
+  { key: 'speed',     label: 'SNELHEID',       min: 0.8,  max: 4.5,  step: 0.2,  default: 2.1,  val: 2.1,   fmt: v => v.toFixed(1) + 'x', hint: '' },
   { key: 'lives',     label: 'LEVENS',         min: 1,    max: 10,   step: 1,    default: 4,    val: 4,     fmt: v => v + '', hint: '' },
   { key: 'rounds',    label: 'RONDES',         min: 1,    max: 20,   step: 1,    default: 3,    val: 3,     fmt: v => v + '', hint: '' },
 ];
@@ -1301,7 +1301,7 @@ function initAudio() {
   // ── master bus ──
   const comp = audioCtx.createDynamicsCompressor();
   comp.threshold.value = -12; comp.ratio.value = 5; comp.attack.value = 0.003; comp.release.value = 0.18;
-  masterBus = audioCtx.createGain(); masterBus.gain.value = 0.7;
+  masterBus = audioCtx.createGain(); masterBus.gain.value = 0.45;
   comp.connect(masterBus); masterBus.connect(audioCtx.destination);
 
   // ── reverb (impulse-built convolver) ──
