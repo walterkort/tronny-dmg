@@ -12,7 +12,7 @@ const io = new Server(server);
 app.use(express.static('public'));
 app.use(express.json());
 
-const SCORES_FILE = path.join(__dirname, 'scores.json');
+const SCORES_FILE = process.env.SCORES_PATH || path.join(__dirname, 'scores.json');
 
 function readScores() {
   try { return JSON.parse(fs.readFileSync(SCORES_FILE, 'utf8')); }
