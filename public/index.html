@@ -1019,7 +1019,6 @@ document.addEventListener('keydown', e => {
 
 startBtn.onclick = () => {
   PLAYERS.forEach(p => { p.score = 0; p.totalPipes = 0; });
-  settingsModified = false;
   lobbyEl.style.display = 'none';
   gameEl.style.display  = 'block';
   buildHUD();
