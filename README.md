@@ -1,15 +1,15 @@
 ```
-████████╗██████╗  ██████╗ ███╗   ██╗███╗   ██╗██╗   ██╗    ██████╗ ███╗   ███╗ ██████╗ 
-╚══██╔══╝██╔══██╗██╔═══██╗████╗  ██║████╗  ██║╚██╗ ██╔╝    ██╔══██╗████╗ ████║██╔════╝ 
-   ██║   ██████╔╝██║   ██║██╔██╗ ██║██╔██╗ ██║ ╚████╔╝     ██║  ██║██╔████╔██║██║  ███╗
-   ██║   ██╔══██╗██║   ██║██║╚██╗██║██║╚██╗██║  ╚██╔╝      ██║  ██║██║╚██╔╝██║██║   ██║
-   ██║   ██║  ██║╚██████╔╝██║ ╚████║██║ ╚████║   ██║       ██████╔╝██║ ╚═╝ ██║╚██████╔╝
-   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═══╝   ╚═╝       ╚═════╝ ╚═╝     ╚═╝ ╚═════╝ 
+████████╗██████╗  ██████╗ ███╗   ██╗███╗   ██╗██╗   ██╗██████╗ ██╗██████╗ ██████╗ 
+╚══██╔══╝██╔══██╗██╔═══██╗████╗  ██║████╗  ██║╚██╗ ██╔╝██╔══██╗██║██╔══██╗██╔══██╗
+   ██║   ██████╔╝██║   ██║██╔██╗ ██║██╔██╗ ██║ ╚████╔╝ ██████╔╝██║██████╔╝██║  ██║
+   ██║   ██╔══██╗██║   ██║██║╚██╗██║██║╚██╗██║  ╚██╔╝  ██╔══██╗██║██╔══██╗██║  ██║
+   ██║   ██║  ██║╚██████╔╝██║ ╚████║██║ ╚████║   ██║   ██████╔╝██║██║  ██║██████╔╝
+   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═══╝   ╚═╝   ╚═════╝ ╚═╝╚═╝  ╚═╝╚═════╝ 
 ```
 
 ## Wat is dit?
 
-**TRONNY.DMG** is een lokale 4-speler Flappy Bird, gebouwd in één avond tijdens een Nerdcore-bijeenkomst in **Birdie's Bar**. Het doel: Claude Code uitproberen en kijken hoe ver je in één sessie kunt komen. Het antwoord: een volledig werkend spel met Tron-thema, procedurele audio en een settings-menu.
+**TRONNYBIRD** is een lokale 4-speler Flappy Bird, gebouwd in één avond tijdens een Nerdcore-bijeenkomst in **Birdie's Bar**. Het doel: Claude Code uitproberen en kijken hoe ver je in één sessie kunt komen. Het antwoord: een volledig werkend spel met Tron-thema, procedurele audio en een settings-menu.
 
 Geen installatie nodig voor spelers — gewoon een browser openen, toets kiezen en hop door de avond.
 

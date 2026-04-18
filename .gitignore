@@ -1,2 +1,26 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Environment
 .env
+.env.local
+.env.*.local
+
+# Runtime data
+scores.json
+*.log
+npm-debug.log*
+
+# Local tool state
+.claude/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
