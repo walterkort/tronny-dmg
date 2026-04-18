@@ -70,7 +70,7 @@
       border: 1px solid rgba(0,229,255,0.15);
       padding: 12px 20px; border-radius: 4px;
       background: rgba(0,229,255,0.03);
-      width: 320px;
+      width: 400px;
     }
     #settings .s-title {
       font-size: 0.65rem; letter-spacing: 3px; opacity: 0.35; margin-bottom: 4px;
@@ -85,13 +85,11 @@
       background: rgba(0,229,255,0.1);
       color: #00e5ff; text-shadow: 0 0 8px #00e5ff44;
     }
-    .s-row .s-label { opacity: 0.6; min-width: 120px; }
+    .s-row .s-label { opacity: 0.6; flex: 1; }
     .s-row.selected .s-label { opacity: 1; }
     .s-row .s-val {
-      font-weight: 900; min-width: 60px; text-align: right; color: #00e5ff;
+      font-weight: 900; min-width: 56px; text-align: right; color: #00e5ff; flex-shrink: 0;
     }
-    .s-row .s-arrows { font-size: 0.7rem; opacity: 0.3; letter-spacing: 0; }
-    .s-row.selected .s-arrows { opacity: 0.7; }
 
     /* ── GAME ── */
     #game { display: none; height: 100dvh; position: relative; }
@@ -202,7 +200,7 @@
     #name-entry {
       display: none; flex-direction: column; align-items: center; gap: 0.6rem;
       border: 1px solid rgba(0,229,255,0.2); border-radius: 4px;
-      padding: 1rem 1.5rem; background: rgba(0,229,255,0.03); width: 320px;
+      padding: 1rem 1.5rem; background: rgba(0,229,255,0.03); width: 400px;
     }
     #name-entry .ne-title { font-size: 0.65rem; letter-spacing: 3px; opacity: 0.4; align-self: flex-start; }
     .ne-row {
@@ -227,7 +225,7 @@
     /* ── HISCORE PANEL ── */
     #hiscore-panel {
       display: none; flex-direction: column; gap: 0.4rem;
-      width: 320px;
+      width: 400px;
     }
     #hiscore-panel .hs-title { font-size: 0.65rem; letter-spacing: 3px; opacity: 0.4; }
     .hs-row {
@@ -248,7 +246,7 @@
     #lobby-hs {
       display: flex; flex-direction: column; gap: 4px;
       border: 1px solid rgba(0,229,255,0.1); border-radius: 4px;
-      padding: 10px 16px; background: rgba(0,229,255,0.02); width: 320px;
+      padding: 10px 16px; background: rgba(0,229,255,0.02); width: 400px;
     }
     #lobby-hs .lhs-title { font-size: 0.65rem; letter-spacing: 3px; opacity: 0.35; margin-bottom: 2px; }
     .lhs-row {
@@ -355,7 +353,7 @@ function renderSettings() {
   el.innerHTML = `<div class="s-title">// INSTELLINGEN &nbsp; ↑↓ KIEZEN &nbsp; ←→ AANPASSEN &nbsp; R RESET</div>` +
     SETTINGS.map((s, i) => `
       <div class="s-row ${i === settingSel ? 'selected' : ''}">
-        <span class="s-label">${s.label}${s.hint ? ' <small style="opacity:.4;font-size:.7em">'+s.hint+'</small>' : ''}</span>
+        <span class="s-label">${s.label}</span>
         <span class="s-val">${s.fmt(s.val)}</span>
       </div>`).join('');
 }
