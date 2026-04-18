@@ -345,6 +345,7 @@ const SETTINGS = [
   { key: 'rounds',    label: 'RONDES',         min: 1,    max: 20,   step: 1,    default: 3,    val: 3,     fmt: v => v + '', hint: '' },
 ];
 let settingSel = 0;
+let settingsModified = false;
 
 function settingVal(key) { return SETTINGS.find(s => s.key === key).val; }
 
@@ -368,6 +369,7 @@ function adjustSetting(dir) {
   s.val = Math.round((s.val + dir * s.step) * 1000) / 1000;
   s.val = Math.max(s.min, Math.min(s.max, s.val));
   sessionStorage.setItem(`set_${s.key}`, s.val);
+  settingsModified = true;
   renderSettings();
 }
 
@@ -816,13 +818,14 @@ function endRound(winnerIdx) {
 }
 
 // ── COUNTDOWN ──────────────────────────────────────────────
+let countdownId = null;
 function startCountdown(cb) {
   let n = 3; phase = 'countdown';
   cdEl.classList.add('show'); cdEl.textContent = n;
-  const t = setInterval(() => {
+  countdownId = setInterval(() => {
     n--;
     if (n > 0) { cdEl.textContent = n; }
-    else { clearInterval(t); cdEl.classList.remove('show'); cb(); }
+    else { clearInterval(countdownId); countdownId = null; cdEl.classList.remove('show'); cb(); }
   }, 800);
 }
 
@@ -905,6 +908,7 @@ function showEnd() {
     });
   }
   stopLoop(); clearTimeout(timer);
+  if (countdownId) { clearInterval(countdownId); countdownId = null; }
   rbEl.classList.remove('show'); cdEl.classList.remove('show');
   gameEl.style.display = 'none';
   endEl.style.display  = 'flex';
@@ -923,32 +927,47 @@ function showEnd() {
        <span class="pts" style="color:${p.color}">${p.totalPipes ?? 0} <small style="opacity:.5;font-size:.7em">passages</small></span>
      </div>`).join('');
 
-  // name entry
-  document.getElementById('ne-inputs').innerHTML = PLAYERS.map((p, i) =>
-    `<div class="ne-row" style="--color:${p.color}">
+  // name entry — only when settings are default and only winner(s)
+  if (settingsModified) {
+    document.getElementById('name-entry').style.display = 'none';
+    document.getElementById('hiscore-panel').style.display = 'flex';
+    renderHiScores();
+    return;
+  }
+  const winnerIndices = PLAYERS.map((p, i) => ((p.totalPipes ?? 0) === maxPipes ? i : -1)).filter(i => i >= 0);
+  document.getElementById('ne-inputs').innerHTML = winnerIndices.map(i => {
+    const p = PLAYERS[i];
+    return `<div class="ne-row" style="--color:${p.color}">
        <div class="ne-dot" style="background:${p.color}"></div>
        <span class="ne-pts">${p.totalPipes ?? 0}</span>
        <span class="ne-label">${p.label}</span>
        <input class="ne-input" id="ne-input-${i}" type="text"
          placeholder="jouw naam" maxlength="20" autocomplete="off"
          style="--color:${p.color}">
-     </div>`).join('');
+     </div>`;
+  }).join('');
   document.getElementById('name-entry').style.display = 'flex';
   document.getElementById('hiscore-panel').style.display = 'none';
 
-  // focus first input
-  setTimeout(() => document.getElementById('ne-input-0')?.focus(), 50);
+  setTimeout(() => document.getElementById(`ne-input-${winnerIndices[0]}`)?.focus(), 50);
 
-  document.getElementById('save-scores-btn').onclick = async () => {
+  async function doSave() {
     const saved = [];
-    for (let i = 0; i < PLAYERS.length; i++) {
+    for (const i of winnerIndices) {
       const val = document.getElementById(`ne-input-${i}`)?.value.trim();
       if (val) { await saveHiScore(val, PLAYERS[i].totalPipes ?? 0); saved.push(val); }
     }
     document.getElementById('name-entry').style.display = 'none';
     document.getElementById('hiscore-panel').style.display = 'flex';
     renderHiScores(saved);
-  };
+  }
+
+  document.getElementById('save-scores-btn').onclick = doSave;
+
+  document.addEventListener('keydown', function onEndKey(e) {
+    if (phase !== 'end') { document.removeEventListener('keydown', onEndKey); return; }
+    if (e.key === 'Enter') { e.preventDefault(); doSave(); document.removeEventListener('keydown', onEndKey); }
+  });
 }
 
 function resetGame() {
@@ -999,6 +1018,7 @@ document.addEventListener('keydown', e => {
 
 startBtn.onclick = () => {
   PLAYERS.forEach(p => { p.score = 0; p.totalPipes = 0; });
+  settingsModified = false;
   lobbyEl.style.display = 'none';
   gameEl.style.display  = 'block';
   buildHUD();
