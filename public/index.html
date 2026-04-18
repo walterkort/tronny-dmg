@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
   <meta charset="UTF-8">
-  <title>FLAPPY.EXE</title>
+  <title>TRONNY.DMG</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
@@ -196,14 +196,79 @@
       color: #00ffe0; cursor: pointer; font-family: inherit;
       text-shadow: 0 0 8px #00ffe0; box-shadow: 0 0 16px #00ffe044;
     }
+
+    /* ── NAME ENTRY ── */
+    #name-entry {
+      display: none; flex-direction: column; align-items: center; gap: 0.6rem;
+      border: 1px solid rgba(0,229,255,0.2); border-radius: 4px;
+      padding: 1rem 1.5rem; background: rgba(0,229,255,0.03); min-width: 300px;
+    }
+    #name-entry .ne-title { font-size: 0.65rem; letter-spacing: 3px; opacity: 0.4; align-self: flex-start; }
+    .ne-row {
+      display: flex; align-items: center; gap: 0.7rem; width: 100%;
+    }
+    .ne-dot  { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 6px var(--color); }
+    .ne-pts  { font-weight: 900; font-size: 1.1rem; color: var(--color); min-width: 24px; text-align: right; text-shadow: 0 0 8px var(--color); }
+    .ne-label { font-size: 0.75rem; opacity: 0.5; min-width: 28px; }
+    .ne-input {
+      flex: 1; background: transparent; border: none; border-bottom: 1px solid var(--color);
+      color: var(--color); font-family: inherit; font-size: 0.95rem; letter-spacing: 2px;
+      padding: 2px 4px; outline: none;
+    }
+    .ne-input::placeholder { opacity: 0.3; }
+    #save-scores-btn {
+      margin-top: 0.4rem; padding: 0.6rem 2rem; font-size: 0.85rem; font-weight: 700; letter-spacing: 3px;
+      border: 1px solid #00ffe0; border-radius: 4px; background: transparent;
+      color: #00ffe0; cursor: pointer; font-family: inherit;
+      text-shadow: 0 0 8px #00ffe0;
+    }
+
+    /* ── HISCORE PANEL ── */
+    #hiscore-panel {
+      display: none; flex-direction: column; gap: 0.4rem;
+      min-width: 300px;
+    }
+    #hiscore-panel .hs-title { font-size: 0.65rem; letter-spacing: 3px; opacity: 0.4; }
+    .hs-row {
+      display: flex; align-items: center; gap: 0.7rem;
+      padding: 0.4rem 0.8rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07); border-radius: 3px;
+      font-size: 0.85rem;
+    }
+    .hs-rank  { opacity: 0.35; min-width: 20px; }
+    .hs-name  { flex: 1; letter-spacing: 1px; }
+    .hs-score { font-weight: 900; color: #00e5ff; text-shadow: 0 0 6px #00e5ff44; min-width: 24px; text-align: right; }
+    .hs-date  { opacity: 0.25; font-size: 0.7rem; }
+    .hs-empty { opacity: 0.3; font-size: 0.8rem; letter-spacing: 2px; padding: 0.5rem 0; }
+    .hs-new   { border-color: rgba(0,229,255,0.4) !important; background: rgba(0,229,255,0.06) !important; }
+
+    /* ── LOBBY HISCORES ── */
+    #lobby-hs {
+      display: flex; flex-direction: column; gap: 4px;
+      border: 1px solid rgba(0,229,255,0.1); border-radius: 4px;
+      padding: 10px 16px; background: rgba(0,229,255,0.02); min-width: 280px;
+    }
+    #lobby-hs .lhs-title { font-size: 0.65rem; letter-spacing: 3px; opacity: 0.35; margin-bottom: 2px; }
+    .lhs-row {
+      display: flex; gap: 0.6rem; font-size: 0.8rem; letter-spacing: 1px; align-items: center;
+    }
+    .lhs-rank  { opacity: 0.3; min-width: 18px; }
+    .lhs-name  { flex: 1; opacity: 0.7; }
+    .lhs-score { font-weight: 900; color: #00e5ff; text-shadow: 0 0 6px #00e5ff33; }
+    .lhs-empty { opacity: 0.25; font-size: 0.75rem; letter-spacing: 2px; }
   </style>
 </head>
 <body>
 
 <div id="lobby">
-  <h1>FLAPPY.EXE</h1>
+  <h1>TRONNY.DMG</h1>
   <p class="sub">// DRUK OP JOUW TOETS OM TE JOINEN</p>
   <div class="players-grid" id="lobby-grid"></div>
+  <div id="lobby-hs">
+    <div class="lhs-title">// HIGH SCORES</div>
+    <div id="lhs-list"></div>
+  </div>
   <div id="settings">
     <div class="s-title">// INSTELLINGEN  ↑↓ SELECTEREN  - = AANPASSEN</div>
   </div>
@@ -231,6 +296,15 @@
   <h1>// GAME OVER</h1>
   <div class="winner-name" id="end-winner"></div>
   <div class="final-scores" id="final-scores"></div>
+  <div id="name-entry">
+    <div class="ne-title">// VOER NAAM IN OM TE SCOREN</div>
+    <div id="ne-inputs"></div>
+    <button id="save-scores-btn">[ OPSLAAN ]</button>
+  </div>
+  <div id="hiscore-panel">
+    <div class="hs-title">// HIGH SCORES</div>
+    <div id="hs-list"></div>
+  </div>
   <button id="play-again">[ OPNIEUW ]</button>
 </div>
 
@@ -351,6 +425,7 @@ function renderLobby() {
   startBtn.textContent = n >= 1 ? `[ START ${n}P ]` : '[ WACHT... ]';
 
   renderSettings();
+  renderLobbyHiScores();
   scheduleAutoStart();
 }
 
@@ -445,6 +520,7 @@ function getDiff() {
   if (lvl > currentLevel) {
     currentLevel = lvl;
     showLevelUp(lvl + 1);
+    setAudioLevel(lvl);
   }
   const base = LEVELS[lvl];
   const gapDelta  = settingVal('gap')   - LEVELS[0].gap;
@@ -464,6 +540,7 @@ function initGame() {
   cv.width  = gameEl.clientWidth;
   cv.height = gameEl.clientHeight;
   pipes = []; frameCount = 0; currentLevel = 0; roundWinnerIdx = -1;
+  setAudioLevel(0);
   roundStartTime = performance.now();
 
   balls = PLAYERS.map((p, i) => ({
@@ -709,10 +786,9 @@ function endRound(winnerIdx) {
   if (phase !== 'playing') return;
   phase = 'roundend';
 
-  // save high scores
+  // accumulate total pipes across rounds
   PLAYERS.forEach((p, i) => {
-    const pipes = balls[i]?.pipesThisRound ?? 0;
-    if (pipes > getHS(p.key)) setHS(p.key, pipes);
+    p.totalPipes = (p.totalPipes ?? 0) + (balls[i]?.pipesThisRound ?? 0);
   });
   updateScoreHUD();
 
@@ -767,6 +843,52 @@ function stopLoop() {
   rafId = null;
 }
 
+// ── HIGH SCORES ────────────────────────────────────────────
+const HS_GLOBAL_KEY = 'tronny_hiscores';
+
+function renderLobbyHiScores() {
+  const list = loadHiScores();
+  const el = document.getElementById('lhs-list');
+  if (!el) return;
+  if (list.length === 0) { el.innerHTML = '<div class="lhs-empty">// NOG GEEN SCORES</div>'; return; }
+  el.innerHTML = list.slice(0, 5).map((e, i) =>
+    `<div class="lhs-row">
+       <span class="lhs-rank">${i + 1}.</span>
+       <span class="lhs-name">${e.name}</span>
+       <span class="lhs-score">${e.score}</span>
+     </div>`).join('');
+}
+
+function loadHiScores() {
+  try { return JSON.parse(localStorage.getItem(HS_GLOBAL_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveHiScore(name, score) {
+  const list = loadHiScores();
+  list.push({ name: name.trim().slice(0, 20), score, date: new Date().toLocaleDateString('nl-NL') });
+  list.sort((a, b) => b.score - a.score);
+  localStorage.setItem(HS_GLOBAL_KEY, JSON.stringify(list.slice(0, 10)));
+}
+
+function renderHiScores(newNames = []) {
+  const list = loadHiScores();
+  const el = document.getElementById('hs-list');
+  if (list.length === 0) {
+    el.innerHTML = '<div class="hs-empty">// GEEN SCORES NOG</div>';
+    return;
+  }
+  el.innerHTML = list.map((e, i) => {
+    const isNew = newNames.includes(e.name);
+    return `<div class="hs-row ${isNew ? 'hs-new' : ''}">
+      <span class="hs-rank">${i + 1}.</span>
+      <span class="hs-name">${e.name}</span>
+      <span class="hs-score">${e.score}</span>
+      <span class="hs-date">${e.date}</span>
+    </div>`;
+  }).join('');
+}
+
 // ── END ────────────────────────────────────────────────────
 function showEnd() {
   stopLoop(); clearTimeout(timer);
@@ -775,23 +897,50 @@ function showEnd() {
   endEl.style.display  = 'flex';
   phase = 'end';
 
-  const totals   = PLAYERS.map(p => ({ p, score: p.score }));
-  const maxScore = Math.max(...totals.map(t => t.score));
-  const winners  = totals.filter(t => t.score === maxScore).map(t => t.p);
+  const totals   = PLAYERS.map(p => ({ p, pipes: p.totalPipes ?? 0 }));
+  const maxPipes = Math.max(...totals.map(t => t.pipes));
+  const winners  = totals.filter(t => t.pipes === maxPipes).map(t => t.p);
   document.getElementById('end-winner').textContent = winners.map(p => p.name).join(' & ');
   document.getElementById('end-winner').style.color = winners[0].color;
   document.getElementById('end-winner').style.textShadow = `0 0 30px ${winners[0].color}`;
-  const sorted = [...totals].sort((a, b) => b.score - a.score);
+  const sorted = [...totals].sort((a, b) => b.pipes - a.pipes);
   document.getElementById('final-scores').innerHTML = sorted.map(({ p }) =>
     `<div class="final-row">
        <span style="color:${p.color};text-shadow:0 0 8px ${p.color}">▶ ${p.label} — ${p.name}</span>
-       <span class="pts" style="color:${p.color}">${p.score} <small style="opacity:.5;font-size:.7em">ronde${p.score !== 1 ? 's' : ''}</small></span>
+       <span class="pts" style="color:${p.color}">${p.totalPipes ?? 0} <small style="opacity:.5;font-size:.7em">passages</small></span>
      </div>`).join('');
+
+  // name entry
+  document.getElementById('ne-inputs').innerHTML = PLAYERS.map((p, i) =>
+    `<div class="ne-row" style="--color:${p.color}">
+       <div class="ne-dot" style="background:${p.color}"></div>
+       <span class="ne-pts">${p.totalPipes ?? 0}</span>
+       <span class="ne-label">${p.label}</span>
+       <input class="ne-input" id="ne-input-${i}" type="text"
+         placeholder="jouw naam" maxlength="20" autocomplete="off"
+         style="--color:${p.color}">
+     </div>`).join('');
+  document.getElementById('name-entry').style.display = 'flex';
+  document.getElementById('hiscore-panel').style.display = 'none';
+
+  // focus first input
+  setTimeout(() => document.getElementById('ne-input-0')?.focus(), 50);
+
+  document.getElementById('save-scores-btn').onclick = () => {
+    const saved = [];
+    PLAYERS.forEach((p, i) => {
+      const val = document.getElementById(`ne-input-${i}`)?.value.trim();
+      if (val) { saveHiScore(val, p.totalPipes ?? 0); saved.push(val); }
+    });
+    document.getElementById('name-entry').style.display = 'none';
+    document.getElementById('hiscore-panel').style.display = 'flex';
+    renderHiScores(saved);
+  };
 }
 
 function resetGame() {
   stopLoop(); clearTimeout(timer); clearTimeout(autoStartTimer); clearInterval(countdownTimer);
-  PLAYERS.forEach(p => p.score = 0);
+  PLAYERS.forEach(p => { p.score = 0; p.totalPipes = 0; });
   round = 0; phase = 'lobby';
   endEl.style.display = 'none'; gameEl.style.display = 'none';
   lobbyEl.style.display = 'flex';
@@ -836,6 +985,7 @@ document.addEventListener('keydown', e => {
 });
 
 startBtn.onclick = () => {
+  PLAYERS.forEach(p => { p.score = 0; p.totalPipes = 0; });
   lobbyEl.style.display = 'none';
   gameEl.style.display  = 'block';
   buildHUD();
@@ -848,10 +998,12 @@ renderLobby();
 // ── TRON LEGACY / DAFT PUNK AUDIO ENGINE ───────────────────
 // BPM 138, A minor, Derezzed-inspired sequencer
 
-const BPM       = 138;
-const STEP_S    = 60 / BPM / 4;   // 16th note in seconds
-const LOOKAHEAD = 0.1;             // seconds ahead to schedule
-const SCHEDULE  = 0.05;            // how often to call scheduler (s)
+const LEVEL_BPM = [138, 150, 163, 178, 195];
+const LOOKAHEAD = 0.1;
+const SCHEDULE  = 0.05;
+
+let stepS      = 60 / LEVEL_BPM[0] / 4;
+let audioDelay = null;
 
 // Derezzed-style arp: 16-step pattern, note index into scale, -1 = rest
 // Scale: A2 A3 C3 D3 E3 G3 A3 C4 (indices 0-7)
@@ -868,10 +1020,16 @@ const HHAT_PAT = [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0];
 // Open hat on step 6,14
 const OHAT_PAT = [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,0,1,0];
 
-let audioCtx    = null;
-let nextStepAt  = 0;
-let stepIdx     = 0;
-let schedTimer  = null;
+let audioCtx   = null;
+let nextStepAt = 0;
+let stepIdx    = 0;
+let schedTimer = null;
+
+function setAudioLevel(lvl) {
+  const bpm = LEVEL_BPM[Math.min(lvl, LEVEL_BPM.length - 1)];
+  stepS = 60 / bpm / 4;
+  if (audioDelay) audioDelay.delayTime.setTargetAtTime(stepS * 3, audioCtx.currentTime, 0.05);
+}
 
 function initAudio() {
   if (audioCtx) { audioCtx.resume(); return; }
@@ -901,10 +1059,11 @@ function initAudio() {
   rev.connect(revGain);
 
   // Delay for arp
-  const delay = audioCtx.createDelay(0.5);
+  audioDelay = audioCtx.createDelay(0.5);
+  const delay = audioDelay;
   const delFB  = audioCtx.createGain(); delFB.gain.value = 0.35;
   const delOut = audioCtx.createGain(); delOut.gain.value = 0.22;
-  delay.delayTime.value = STEP_S * 3;
+  delay.delayTime.value = stepS * 3;
   delay.connect(delFB); delFB.connect(delay);
   delay.connect(delOut); delOut.connect(master);
 
@@ -965,10 +1124,10 @@ function initAudio() {
     flt.type = 'lowpass'; flt.frequency.value = 3200; flt.Q.value = 2;
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(0.28, t + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.001, t + STEP_S * 1.8);
+    g.gain.exponentialRampToValueAtTime(0.001, t + stepS * 1.8);
     o.connect(flt); flt.connect(g);
     g.connect(master); g.connect(delay); g.connect(rev);
-    o.start(t); o.stop(t + STEP_S * 2);
+    o.start(t); o.stop(t + stepS * 2);
   }
 
   function bassNote(t, freq) {
@@ -980,12 +1139,12 @@ function initAudio() {
     o2.type = 'square';  o2.frequency.value = freq / 2;
     flt.type = 'lowpass';
     flt.frequency.setValueAtTime(800, t);
-    flt.frequency.exponentialRampToValueAtTime(200, t + STEP_S * 4);
+    flt.frequency.exponentialRampToValueAtTime(200, t + stepS * 4);
     flt.Q.value = 3;
-    g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.001, t + STEP_S * 4.5);
+    g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.001, t + stepS * 4.5);
     o.connect(flt); o2.connect(flt); flt.connect(g); g.connect(master);
-    o.start(t); o.stop(t + STEP_S * 5);
-    o2.start(t); o2.stop(t + STEP_S * 5);
+    o.start(t); o.stop(t + stepS * 5);
+    o2.start(t); o2.stop(t + stepS * 5);
   }
 
   // ── SCHEDULER ──
@@ -1008,7 +1167,7 @@ function initAudio() {
       const bn = BASS_PAT[s];
       if (bn >= 0) bassNote(t, SCALE[bn] / 2);
 
-      nextStepAt += STEP_S;
+      nextStepAt += stepS;
       stepIdx++;
     }
     schedTimer = setTimeout(schedule, SCHEDULE * 1000);
