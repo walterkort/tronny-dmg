@@ -95,6 +95,26 @@
       font-weight: 900; min-width: 56px; text-align: right; color: #00e5ff; flex-shrink: 0;
     }
 
+    /* ── TOUCH ZONES ── */
+    #touch-overlay {
+      position: fixed; inset: 0; z-index: 10;
+      display: none; pointer-events: none;
+    }
+    #touch-overlay.active { display: grid; pointer-events: auto; }
+    .touch-zone {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.5rem; letter-spacing: 2px;
+      border: 2px solid transparent;
+      opacity: 0.25; transition: opacity 0.2s, background 0.2s;
+      user-select: none; -webkit-user-select: none;
+    }
+    .touch-zone.joined {
+      opacity: 0.15; font-size: 3rem;
+      border-color: var(--color);
+      background: color-mix(in srgb, var(--color) 10%, transparent);
+    }
+    .touch-zone:not(.joined):active { opacity: 0.5; }
+
     /* ── GAME ── */
     #game { display: none; height: 100dvh; position: relative; }
     #game canvas { width: 100%; height: 100%; display: block; }
@@ -289,6 +309,7 @@
   </div>
 </div>
 
+<div id="touch-overlay"></div>
 <div id="countdown"></div>
 <div id="result-banner">
   <div class="winner-text" id="rb-text"></div>
@@ -330,13 +351,14 @@ const BALL_R           = 13;
 const PIPE_W           = 50;
 const TRON_BLUE = '#00e5ff';
 
-// Level thresholds (seconds) → { speed, gap, interval }
+// Level thresholds (pipes cleared) → { speed, gap, interval }
+// gap values are fractions of reference height (800px)
 const LEVELS = [
-  { after: 0,  speed: 1.8, gap: 230, interval: 140 },
-  { after: 20, speed: 2.3, gap: 200, interval: 125 },
-  { after: 40, speed: 2.8, gap: 175, interval: 110 },
-  { after: 60, speed: 3.3, gap: 155, interval: 95  },
-  { after: 80, speed: 3.8, gap: 138, interval: 82  },
+  { after: 0,  speed: 1.8, gap: 0.29, interval: 140 },
+  { after: 10, speed: 2.3, gap: 0.25, interval: 125 },
+  { after: 25, speed: 2.8, gap: 0.22, interval: 110 },
+  { after: 45, speed: 3.3, gap: 0.19, interval: 95  },
+  { after: 70, speed: 3.8, gap: 0.17, interval: 82  },
 ];
 
 // ── SETTINGS ───────────────────────────────────────────────
@@ -385,6 +407,37 @@ SETTINGS.forEach(s => {
   if (saved !== null) s.val = +saved;
 });
 
+// ── TOUCH ──────────────────────────────────────────────────
+const isTouchDevice = () => navigator.maxTouchPoints > 0;
+// corners: [bottom-left, bottom-right, top-left, top-right]
+const TOUCH_LABELS  = ['↙', '↘', '↖', '↗'];
+const TOUCH_KEYS    = ['touch0', 'touch1', 'touch2', 'touch3'];
+
+function getTouchCorner(touch) {
+  const x = touch.clientX / window.innerWidth;
+  const y = touch.clientY / window.innerHeight;
+  if (x <= 0.5 && y >  0.5) return 0; // bottom-left
+  if (x >  0.5 && y >  0.5) return 1; // bottom-right
+  if (x <= 0.5 && y <= 0.5) return 2; // top-left
+  return 3;                            // top-right
+}
+
+function renderTouchOverlay() {
+  const el = document.getElementById('touch-overlay');
+  if (!isTouchDevice()) { el.classList.remove('active'); return; }
+  el.style.gridTemplateColumns = '1fr 1fr';
+  el.style.gridTemplateRows    = '1fr 1fr';
+  // order: top-left, top-right, bottom-left, bottom-right
+  const order = [2, 3, 0, 1];
+  el.innerHTML = order.map(ci => {
+    const p = PLAYERS.find(p => p.key === TOUCH_KEYS[ci]);
+    return p
+      ? `<div class="touch-zone joined" style="--color:${p.color};grid-order:${ci}">${TOUCH_LABELS[ci]}</div>`
+      : `<div class="touch-zone" data-corner="${ci}" style="color:#00e5ff">${TOUCH_LABELS[ci]}<br><span style="font-size:0.5rem;letter-spacing:1px;opacity:.6">TAP OM TE JOINEN</span></div>`;
+  }).join('');
+  el.classList.toggle('active', phase === 'lobby');
+}
+
 let PLAYERS = [];
 let phase   = 'lobby';
 let round   = 0;
@@ -394,6 +447,7 @@ let roundStartTime = 0;
 
 let balls = [];
 let pipes = [];
+let gameScale = 1;
 let frameCount   = 0;
 let pipesCleared = 0;
 
@@ -433,6 +487,7 @@ function renderLobby() {
 
   renderSettings();
   renderLobbyHiScores();
+  renderTouchOverlay();
   scheduleAutoStart();
 }
 
@@ -519,20 +574,22 @@ function setChipDead(i, dead) {
 let currentLevel = 0;
 
 function getDiff() {
-  const elapsed = (performance.now() - roundStartTime) / 1000;
+  const maxPipes = balls.length ? Math.max(...balls.map(b => b.pipesThisRound ?? 0)) : 0;
   let lvl = 0;
   for (let i = LEVELS.length - 1; i >= 0; i--) {
-    if (elapsed >= LEVELS[i].after) { lvl = i; break; }
+    if (maxPipes >= LEVELS[i].after) { lvl = i; break; }
   }
   if (lvl > currentLevel) {
     currentLevel = lvl;
     showLevelUp(lvl + 1);
     setAudioLevel(lvl);
   }
-  const base = LEVELS[lvl];
-  const gapDelta  = settingVal('gap')   - LEVELS[0].gap;
-  const spdScale  = settingVal('speed') / LEVELS[0].speed;
-  return { speed: base.speed * spdScale, gap: base.gap + gapDelta, interval: Math.round(base.interval * spdScale) };
+  const base     = LEVELS[lvl];
+  const baseGapPx  = LEVELS[0].gap * cv.height;
+  const gapDelta   = settingVal('gap') - baseGapPx;
+  const spdScale   = settingVal('speed') / LEVELS[0].speed;
+  const gap        = base.gap * cv.height + gapDelta;
+  return { speed: base.speed * spdScale, gap, interval: Math.round(base.interval * spdScale) };
 }
 
 function showLevelUp(n) {
@@ -547,11 +604,13 @@ function initGame() {
   cv.width  = gameEl.clientWidth;
   cv.height = gameEl.clientHeight;
   pipes = []; frameCount = 100; currentLevel = 0; roundWinnerIdx = -1;
+  lastFrameTime = 0;
+  gameScale = cv.height / 800;
   setAudioLevel(0);
   roundStartTime = performance.now();
 
   balls = PLAYERS.map((p, i) => ({
-    x: cv.width * 0.28 - i * 38,
+    x: cv.width * 0.28 - i * (38 * gameScale),
     y: cv.height * 0.45,
     vy: 0,
     lives: settingVal('lives'),
@@ -587,16 +646,21 @@ function respawn(i) {
 // ── GAME LOOP ──────────────────────────────────────────────
 function spawnPipe() {
   const d = getDiff();
-  const minTop = 60, maxTop = cv.height - d.gap - 60;
+  const margin = 60 * gameScale;
+  const minTop = margin, maxTop = cv.height - d.gap - margin;
   pipes.push({ x: cv.width, topH: minTop + Math.random() * (maxTop - minTop), gap: d.gap, passed: false });
 }
 
-function gameLoop() {
-  if (phase === 'playing') tick();
+let lastFrameTime = 0;
+
+function gameLoop(ts) {
+  if (phase === 'playing') tick(ts);
   rafId = requestAnimationFrame(gameLoop);
 }
 
-function tick() {
+function tick(ts) {
+  const dt  = lastFrameTime ? Math.min((ts - lastFrameTime) / 16.667, 3) : 1;
+  lastFrameTime = ts;
   const d   = getDiff();
   const now = performance.now();
   ctx.clearRect(0, 0, cv.width, cv.height);
@@ -624,35 +688,32 @@ function tick() {
   ctx.restore();
 
   // ── pipes ──
-  frameCount++;
+  frameCount += dt;
   if (frameCount >= d.interval) { spawnPipe(); frameCount = 0; }
 
   pipes.forEach(p => {
-    p.x -= d.speed;
+    p.x -= d.speed * dt;
 
+    const pw   = PIPE_W * gameScale;
     const botY = p.topH + p.gap;
-    const R    = PIPE_W / 2; // fully semicircular ends
+    const R    = pw / 2;
 
-    // hue cycles slowly based on pipe index (assigned at spawn)
     const neon = TRON_BLUE;
     const dark = '#001a2a';
 
     ctx.save();
 
-    // fill: dark tinted core
     ctx.fillStyle = dark;
-    ctx.beginPath(); ctx.roundRect(p.x, 0,    PIPE_W, p.topH,           [0,0,R,R]); ctx.fill();
-    ctx.beginPath(); ctx.roundRect(p.x, botY,  PIPE_W, cv.height - botY, [R,R,0,0]); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(p.x, 0,    pw, p.topH,           [0,0,R,R]); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(p.x, botY,  pw, cv.height - botY, [R,R,0,0]); ctx.fill();
 
-    // neon stroke + glow
     ctx.strokeStyle = neon;
     ctx.lineWidth   = 2.5;
     ctx.shadowColor = neon;
     ctx.shadowBlur  = 20;
-    ctx.beginPath(); ctx.roundRect(p.x, 0,    PIPE_W, p.topH,           [0,0,R,R]); ctx.stroke();
-    ctx.beginPath(); ctx.roundRect(p.x, botY,  PIPE_W, cv.height - botY, [R,R,0,0]); ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(p.x, 0,    pw, p.topH,           [0,0,R,R]); ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(p.x, botY,  pw, cv.height - botY, [R,R,0,0]); ctx.stroke();
 
-    // inner highlight
     ctx.strokeStyle = 'rgba(0,229,255,0.2)';
     ctx.lineWidth   = 1; ctx.shadowBlur = 0;
     ctx.beginPath(); ctx.moveTo(p.x + 7, 0);    ctx.lineTo(p.x + 7, p.topH);     ctx.stroke();
@@ -660,40 +721,42 @@ function tick() {
 
     ctx.restore();
 
-    // count per alive ball
+    const br = BALL_R * gameScale;
     balls.forEach((b, bi) => {
-      if (!b.dead && !p.cleared?.[bi] && p.x + PIPE_W < b.x - BALL_R) {
+      if (!b.dead && !p.cleared?.[bi] && p.x + pw < b.x - br) {
         (p.cleared ??= {})[bi] = true;
         b.pipesThisRound++;
         updateScoreHUD();
       }
     });
   });
-  pipes = pipes.filter(p => p.x + PIPE_W > 0);
+  pipes = pipes.filter(p => p.x + PIPE_W * gameScale > 0);
 
   // ── balls ──
+  const br = BALL_R * gameScale;
   balls.forEach((b, i) => {
     if (b.dead) return;
 
-    b.vy += settingVal('gravity');
-    b.y  += b.vy;
+    b.vy += settingVal('gravity') * dt;
+    b.y  += b.vy * dt;
 
     const invincible = now < b.invincibleUntil;
+    const pw = PIPE_W * gameScale;
 
     if (!invincible) {
-      if (b.y - BALL_R < 0 || b.y + BALL_R > cv.height) { hitBall(i); return; }
+      if (b.y - br < 0 || b.y + br > cv.height) { hitBall(i); return; }
       for (const p of pipes) {
-        const inX      = b.x + BALL_R > p.x && b.x - BALL_R < p.x + PIPE_W;
-        const hitsTop  = b.y - BALL_R < p.topH;           // overlaps top bar
-        const hitsBot  = b.y + BALL_R > p.topH + p.gap;   // overlaps bottom bar
+        const inX     = b.x + br > p.x && b.x - br < p.x + pw;
+        const hitsTop = b.y - br < p.topH;
+        const hitsBot = b.y + br > p.topH + p.gap;
         if (inX && (hitsTop || hitsBot)) { hitBall(i); return; }
       }
     } else {
-      if (b.y - BALL_R < 0)         { b.y = BALL_R; b.vy = 0; }
-      if (b.y + BALL_R > cv.height) { b.y = cv.height - BALL_R; b.vy = 0; }
+      if (b.y - br < 0)         { b.y = br; b.vy = 0; }
+      if (b.y + br > cv.height) { b.y = cv.height - br; b.vy = 0; }
     }
 
-    drawBall(b.x, b.y, b.color, b.vy, invincible, now, i);
+    drawBall(b.x, b.y, b.color, b.vy, invincible, now, i, br);
   });
 
   // invincibility countdown bar
@@ -712,14 +775,13 @@ function tick() {
   }
 }
 
-function drawBall(x, y, color, vy, invincible, now) {
+function drawBall(x, y, color, vy, invincible, now, idx, br = BALL_R) {
   ctx.save();
   ctx.translate(x, y);
 
   if (invincible) {
-    // pulsing hex shield
     const pulse = 0.5 + 0.5 * Math.sin(now * 0.009);
-    const sr = BALL_R + 7 + pulse * 5;
+    const sr = br + 7 * gameScale + pulse * 5 * gameScale;
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2 - Math.PI / 6;
@@ -727,35 +789,28 @@ function drawBall(x, y, color, vy, invincible, now) {
               : ctx.lineTo(Math.cos(a)*sr, Math.sin(a)*sr);
     }
     ctx.closePath();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
     ctx.shadowColor = color; ctx.shadowBlur = 20;
     ctx.globalAlpha = 0.6 + 0.4 * pulse;
     ctx.stroke();
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   }
 
-  // outer glow ring
   ctx.shadowColor = color; ctx.shadowBlur = 28;
-  ctx.strokeStyle = color;
-  ctx.lineWidth   = 2.5;
-  ctx.beginPath(); ctx.arc(0, 0, BALL_R, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(0, 0, br, 0, Math.PI * 2); ctx.stroke();
 
-  // dark core
   ctx.shadowBlur = 0;
   ctx.fillStyle  = '#050510';
-  ctx.beginPath(); ctx.arc(0, 0, BALL_R - 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, br - 2.5, 0, Math.PI * 2); ctx.fill();
 
-  // inner cross lines (Tron circuit)
-  ctx.strokeStyle = color + '66';
-  ctx.lineWidth   = 1;
-  ctx.beginPath(); ctx.moveTo(-BALL_R + 4, 0); ctx.lineTo(BALL_R - 4, 0); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0, -BALL_R + 4); ctx.lineTo(0, BALL_R - 4); ctx.stroke();
+  ctx.strokeStyle = color + '66'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(-br + 4, 0); ctx.lineTo(br - 4, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, -br + 4); ctx.lineTo(0, br - 4); ctx.stroke();
 
-  // center dot
   ctx.shadowColor = color; ctx.shadowBlur = 12;
   ctx.fillStyle   = color;
-  ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, 3 * gameScale, 0, Math.PI * 2); ctx.fill();
 
   ctx.restore();
 }
@@ -983,6 +1038,7 @@ function resetGame() {
   endEl.style.display = 'none'; gameEl.style.display = 'none';
   lobbyEl.style.display = 'flex';
   renderLobby();
+  renderTouchOverlay();
 }
 
 // ── INPUT ──────────────────────────────────────────────────
@@ -1022,8 +1078,36 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ── TOUCH EVENTS ───────────────────────────────────────────
+document.getElementById('touch-overlay').addEventListener('touchstart', e => {
+  e.preventDefault();
+  Array.from(e.changedTouches).forEach(t => {
+    const ci = getTouchCorner(t);
+    const key = TOUCH_KEYS[ci];
+    if (phase === 'lobby') {
+      if (!PLAYERS.find(p => p.key === key) && PLAYERS.length < 4) {
+        const i = PLAYERS.length;
+        PLAYERS.push({ key, label: TOUCH_LABELS[ci], color: COLORS[i], name: NAMES[i], score: 0, cornerIdx: ci });
+        renderLobby();
+        renderTouchOverlay();
+      }
+    }
+  });
+}, { passive: false });
+
+document.getElementById('game').addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (phase !== 'playing') return;
+  Array.from(e.changedTouches).forEach(t => {
+    const ci = getTouchCorner(t);
+    const pi = PLAYERS.findIndex(p => p.cornerIdx === ci);
+    if (pi !== -1 && !balls[pi]?.dead) balls[pi].vy = -settingVal('jump');
+  });
+}, { passive: false });
+
 startBtn.onclick = () => {
   PLAYERS.forEach(p => { p.score = 0; p.totalPipes = 0; });
+  document.getElementById('touch-overlay').classList.remove('active');
   lobbyEl.style.display = 'none';
   gameEl.style.display  = 'block';
   buildHUD();
